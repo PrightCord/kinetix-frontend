@@ -8,7 +8,7 @@ import { Navbar, NavTab, TAB_ROUTES } from './components/Navbar';
 import { LiveTesterModal } from './components/LiveTesterModal';
 import { LoginScreen } from './components/LoginScreen';
 import { KeysView } from './components/views/KeysView';
-import { CombosView } from './components/views/CombosView';
+import { RoutesView } from './components/views/RoutesView';
 import { ProvidersView } from './components/views/ProvidersView';
 import { AccountsView } from './components/views/AccountsView';
 import { UsageView } from './components/views/UsageView';
@@ -21,13 +21,13 @@ import {
   INITIAL_PROVIDERS,
   INITIAL_ACCOUNTS,
   INITIAL_MODELS,
-  INITIAL_COMBOS,
+  INITIAL_ROUTES,
   INITIAL_ALIASES,
   INITIAL_REQUESTS,
   INITIAL_AUDIT_LOGS,
   INITIAL_METRICS,
 } from './data/mockData';
-import { VirtualKey, Combo, Provider, Account, ModelConfig, ModelAlias, AuditLog } from './types';
+import { VirtualKey, Route, Provider, Account, ModelConfig, ModelAlias, AuditLog } from './types';
 import { Play } from 'lucide-react';
 
 function getTabFromPath(path: string): NavTab {
@@ -129,7 +129,7 @@ export default function App() {
   const [providers, setProviders] = useState<Provider[]>(INITIAL_PROVIDERS);
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [models, setModels] = useState<ModelConfig[]>(INITIAL_MODELS);
-  const [combos, setCombos] = useState<Combo[]>(INITIAL_COMBOS);
+  const [routes, setRoutes] = useState<Route[]>(INITIAL_ROUTES);
   const [aliases, setAliases] = useState<ModelAlias[]>(INITIAL_ALIASES);
   const [requests, setRequests] = useState(INITIAL_REQUESTS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
@@ -169,38 +169,38 @@ export default function App() {
     setAuditLogs((prev) => [newAudit, ...prev]);
   };
 
-  const handleAddCombo = (newCombo: Combo) => {
-    setCombos((prev) => [newCombo, ...prev]);
+  const handleAddRoute = (newRoute: Route) => {
+    setRoutes((prev) => [newRoute, ...prev]);
     const newAudit: AuditLog = {
       id: `audit-${Date.now()}`,
       timestamp: new Date().toISOString(),
       actor: currentUser,
-      action: 'combo_created',
-      targetType: 'combo',
-      targetId: newCombo.id,
-      targetName: newCombo.name,
-      details: `Created combo ${newCombo.name} with ${newCombo.targets.length} targets.`,
+      action: 'route_created',
+      targetType: 'route',
+      targetId: newRoute.id,
+      targetName: newRoute.name,
+      details: `Created route ${newRoute.name} with ${newRoute.targets.length} targets.`,
     };
     setAuditLogs((prev) => [newAudit, ...prev]);
   };
 
-  const handleUpdateCombo = (updated: Combo) => {
-    setCombos((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+  const handleUpdateRoute = (updated: Route) => {
+    setRoutes((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   };
 
-  const handleDeleteCombo = (comboId: string) => {
-    const target = combos.find((c) => c.id === comboId);
-    setCombos((prev) => prev.filter((c) => c.id !== comboId));
+  const handleDeleteRoute = (routeId: string) => {
+    const target = routes.find((c) => c.id === routeId);
+    setRoutes((prev) => prev.filter((c) => c.id !== routeId));
     if (target) {
       const newAudit: AuditLog = {
         id: `audit-${Date.now()}`,
         timestamp: new Date().toISOString(),
         actor: currentUser,
-        action: 'combo_deleted',
-        targetType: 'combo',
-        targetId: comboId,
+        action: 'route_deleted',
+        targetType: 'route',
+        targetId: routeId,
         targetName: target.name,
-        details: `Deleted fallback combo ${target.name}.`,
+        details: `Deleted fallback route ${target.name}.`,
       };
       setAuditLogs((prev) => [newAudit, ...prev]);
     }
@@ -326,7 +326,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fdfbf7] text-[#2d2d2d] flex flex-col selection:bg-[#fff9c4] selection:text-[#2d2d2d]">
+    <div className="min-h-screen bg-[var(--paper)] text-[var(--ink)] flex flex-col selection:bg-[var(--postit)] selection:text-[var(--ink)]">
       {/* Hand-Drawn Header & Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -347,14 +347,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'combos' && (
-          <CombosView
-            combos={combos}
+        {activeTab === 'routes' && (
+          <RoutesView
+            routes={routes}
             accounts={accounts}
             models={models}
-            onAddCombo={handleAddCombo}
-            onUpdateCombo={handleUpdateCombo}
-            onDeleteCombo={handleDeleteCombo}
+            onAddRoute={handleAddRoute}
+            onUpdateRoute={handleUpdateRoute}
+            onDeleteRoute={handleDeleteRoute}
           />
         )}
 
@@ -394,7 +394,7 @@ export default function App() {
         {activeTab === 'aliases' && (
           <AliasesView
             aliases={aliases}
-            combos={combos}
+            routes={routes}
             models={models}
             onAddAlias={handleAddAlias}
             onDeleteAlias={handleDeleteAlias}
@@ -412,15 +412,15 @@ export default function App() {
       </div>
 
       {/* Footer */}
-      <footer className="w-full py-6 px-4 text-center font-body text-sm text-[#2d2d2d]/70">
+      <footer className="w-full py-6 px-4 text-center font-body text-sm text-[var(--ink)]/70">
         <p className="flex items-center justify-center gap-2 flex-wrap">
-          <strong className="font-heading text-base text-[#2d2d2d]">Kinetix</strong>
+          <strong className="font-heading text-base text-[var(--ink)]">Kinetix</strong>
           <span>•</span>
           <span>Zero-downtime LLM Multi-Protocol Proxy</span>
           <span>•</span>
-          <span className="underline decoration-wavy decoration-[#ff4d4d]">Hand-Drawn Design System</span>
+          <span className="underline decoration-wavy decoration-[var(--marker-red)]">Hand-Drawn Design System</span>
         </p>
-        <p className="text-xs text-[#2d2d2d]/50 font-mono mt-1">
+        <p className="text-xs text-[var(--ink)]/50 font-mono mt-1">
           OpenAI & Anthropic streaming in • Gemini, OpenAI, & Anthropic upstream out • SQLite WAL at rest
         </p>
       </footer>
@@ -433,7 +433,7 @@ export default function App() {
           onClick={() => setIsTesterOpen(true)}
           className="gap-2 font-heading font-bold shadow-lg shadow-black/10"
         >
-          <Play className="w-5 h-5 fill-white" />
+          <Play className="w-5 h-5 fill-[var(--surface)]" />
           Test Proxy Live
         </SketchButton>
       </div>
@@ -443,7 +443,7 @@ export default function App() {
         isOpen={isTesterOpen}
         onClose={() => setIsTesterOpen(false)}
         keys={keys}
-        combos={combos}
+        routes={routes}
         models={models}
       />
     </div>

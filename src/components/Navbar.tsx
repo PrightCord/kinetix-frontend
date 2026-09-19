@@ -4,11 +4,11 @@ import { ProxyMetrics } from '../types';
 import { formatCurrency } from '../lib/designSystem';
 import { SketchButton, SketchBadge } from './HandDrawnElements';
 
-export type NavTab = 'keys' | 'combos' | 'providers' | 'accounts' | 'usage' | 'requests' | 'aliases' | 'audit';
+export type NavTab = 'keys' | 'routes' | 'providers' | 'accounts' | 'usage' | 'requests' | 'aliases' | 'audit';
 
 export const TAB_ROUTES: Record<NavTab, string> = {
   keys: '/admin/keys',
-  combos: '/admin/combos',
+  routes: '/admin/routes',
   providers: '/admin/providers',
   accounts: '/admin/accounts',
   usage: '/admin/usage',
@@ -36,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const tabs: { id: NavTab; label: string; icon: React.ReactNode; badge?: string; path: string }[] = [
     { id: 'keys', label: 'Virtual Keys', icon: <Key className="w-5 h-5" />, path: TAB_ROUTES.keys },
-    { id: 'combos', label: 'Combos & Fallback', icon: <Shuffle className="w-5 h-5" />, badge: 'Active', path: TAB_ROUTES.combos },
+    { id: 'routes', label: 'Routes & Fallback', icon: <Shuffle className="w-5 h-5" />, badge: 'Active', path: TAB_ROUTES.routes },
     { id: 'providers', label: 'Upstream Providers', icon: <Server className="w-5 h-5" />, path: TAB_ROUTES.providers },
     { id: 'accounts', label: 'Accounts & Pools', icon: <Users className="w-5 h-5" />, path: TAB_ROUTES.accounts },
     { id: 'usage', label: 'Usage & Spend', icon: <BarChart3 className="w-5 h-5" />, path: TAB_ROUTES.usage },
@@ -46,28 +46,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <header className="w-full bg-[#fdfbf7] border-b-2 border-[#2d2d2d] pb-2 pt-3 px-4 md:px-8 relative">
+    <header className="w-full bg-[var(--paper)] border-b-2 border-[var(--ink)] pb-2 pt-3 px-4 md:px-8 relative">
       {/* Top row: Brand & Status Widgets */}
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-3">
         <div className="flex items-center gap-3">
           {/* Hand-drawn Logo */}
           <div
-            className="w-11 h-11 bg-[#ff4d4d] text-white flex items-center justify-center font-heading font-bold text-2xl border-2 border-[#2d2d2d] sketch-shadow -rotate-2 select-none"
+            className="w-11 h-11 bg-[var(--marker-red)] text-[var(--surface)] flex items-center justify-center font-heading font-bold text-2xl border-2 border-[var(--ink)] sketch-shadow -rotate-2 select-none"
             style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
           >
             K
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-heading font-bold tracking-tight text-[#2d2d2d]">
+              <h1 className="text-3xl font-heading font-bold tracking-tight text-[var(--ink)]">
                 Kinetix
               </h1>
               <SketchBadge variant="yellow" rotation="1deg" className="text-xs font-heading">
                 v1.2 Proxy
               </SketchBadge>
             </div>
-            <p className="text-sm text-[#2d2d2d]/80 font-body -mt-1">
-              Multi-Protocol LLM Proxy for <span className="font-bold underline decoration-wavy decoration-[#ff4d4d]">Pi</span> & Team Tools
+            <p className="text-sm text-[var(--ink)]/80 font-body -mt-1">
+              Multi-Protocol LLM Proxy for <span className="font-bold underline decoration-wavy decoration-[var(--marker-red)]">Pi</span> & Team Tools
             </p>
           </div>
         </div>
@@ -76,22 +76,22 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
           {/* Cloudflare Tunnel Status */}
           <div
-            className="flex items-center gap-2 bg-white px-3 py-1.5 border-2 border-[#2d2d2d] sketch-shadow-sm text-sm"
+            className="flex items-center gap-2 bg-[var(--surface)] px-3 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-sm"
             style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
           >
-            <div className="w-2.5 h-2.5 rounded-full bg-[#2e7d32] animate-pulse border border-[#2d2d2d]" />
-            <span className="font-body text-[#2d2d2d]">
-              <ShieldCheck className="w-4 h-4 inline-block mr-1 text-[#2d5da1]" />
+            <div className="w-2.5 h-2.5 rounded-full bg-[var(--pen-green)] animate-pulse border border-[var(--ink)]" />
+            <span className="font-body text-[var(--ink)]">
+              <ShieldCheck className="w-4 h-4 inline-block mr-1 text-[var(--pen-blue)]" />
               Tunnel: <strong className="font-heading">Online</strong> (Cloudflare)
             </span>
           </div>
 
           {/* Active Streams */}
           <div
-            className="flex items-center gap-1.5 bg-white px-3 py-1.5 border-2 border-[#2d2d2d] sketch-shadow-sm text-sm"
+            className="flex items-center gap-1.5 bg-[var(--surface)] px-3 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-sm"
             style={{ borderRadius: '255px 25px 225px 25px / 25px 225px 25px 255px' }}
           >
-            <Activity className="w-4 h-4 text-[#ff4d4d]" />
+            <Activity className="w-4 h-4 text-[var(--marker-red)]" />
             <span className="font-body">
               Active Streams: <strong className="font-heading text-base">{metrics.activeStreams}</strong>
             </span>
@@ -99,10 +99,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Daily Spend */}
           <div
-            className="flex items-center gap-1.5 bg-[#fff9c4] px-3 py-1.5 border-2 border-[#2d2d2d] sketch-shadow-sm text-sm"
+            className="flex items-center gap-1.5 bg-[var(--postit)] px-3 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-sm"
             style={{ borderRadius: '20px 300px 20px 280px / 280px 20px 300px 20px' }}
           >
-            <DollarSign className="w-4 h-4 text-[#2d5da1]" />
+            <DollarSign className="w-4 h-4 text-[var(--pen-blue)]" />
             <span className="font-body">
               Spend: <strong className="font-heading text-base">{formatCurrency(metrics.totalSpendUsd)}</strong>
             </span>
@@ -116,20 +116,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onOpenTester}
             className="gap-1.5 font-heading font-bold"
           >
-            <Play className="w-4 h-4 fill-white" />
+            <Play className="w-4 h-4 fill-[var(--surface)]" />
             Live Proxy Test
           </SketchButton>
 
           {/* User Session & Logout */}
           {currentUser && (
-            <div className="flex items-center gap-1.5 pl-1 border-l-2 border-[#2d2d2d]/30">
+            <div className="flex items-center gap-1.5 pl-1 border-l-2 border-[var(--ink)]/30">
               <div
-                className="hidden sm:flex items-center gap-1.5 bg-white px-2.5 py-1 border-2 border-[#2d2d2d] sketch-shadow-sm text-xs font-mono"
+                className="hidden sm:flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-mono"
                 style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
                 title={`Active Gateway Session: ${currentUser}`}
               >
-                <div className="w-2 h-2 rounded-full bg-[#2e7d32]" />
-                <span className="text-[#2d2d2d] truncate max-w-[110px] font-bold">
+                <div className="w-2 h-2 rounded-full bg-[var(--pen-green)]" />
+                <span className="text-[var(--ink)] truncate max-w-[110px] font-bold">
                   {currentUser}
                 </span>
               </div>
@@ -138,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   id="btn-logout"
                   onClick={onLogout}
-                  className="px-2.5 py-1.5 bg-white hover:bg-[#ffebee] text-[#2d2d2d] hover:text-[#ff4d4d] border-2 border-[#2d2d2d] rounded sketch-shadow-sm cursor-pointer transition-colors flex items-center gap-1 text-xs font-heading font-bold"
+                  className="px-2.5 py-1.5 bg-[var(--surface)] hover:bg-[var(--tint-red)] text-[var(--ink)] hover:text-[var(--marker-red)] border-2 border-[var(--ink)] rounded sketch-shadow-sm cursor-pointer transition-colors flex items-center gap-1 text-xs font-heading font-bold"
                   title="Sign Out / Lock Gateway"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -166,28 +166,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                   e.preventDefault();
                   onSelectTab(tab.id);
                 }}
-                className={`group relative flex items-center gap-2 px-3.5 py-1.5 font-heading text-base md:text-lg border-2 border-[#2d2d2d] transition-all select-none no-underline cursor-pointer ${tilt} ${
+                className={`group relative flex items-center gap-2 px-3.5 py-1.5 font-heading text-base md:text-lg border-2 border-[var(--ink)] transition-all select-none no-underline cursor-pointer ${tilt} ${
                   isActive
-                    ? 'bg-white text-[#2d2d2d] border-b-0 -translate-y-1 shadow-[3px_3px_0px_0px_#2d2d2d] font-bold'
-                    : 'bg-[#e5e0d8]/80 text-[#2d2d2d]/80 hover:bg-white hover:text-[#2d2d2d] shadow-[2px_2px_0px_0px_#2d2d2d]'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] border-b-0 -translate-y-1 shadow-[3px_3px_0px_0px_var(--shadow-ink)] font-bold'
+                    : 'bg-[var(--erased)]/80 text-[var(--ink)]/80 hover:bg-[var(--surface)] hover:text-[var(--ink)] shadow-[2px_2px_0px_0px_var(--shadow-ink)]'
                 }`}
                 style={{
                   borderRadius: '16px 16px 0 0',
                 }}
               >
-                <span className={isActive ? 'text-[#ff4d4d]' : 'text-[#2d2d2d]/70'}>{tab.icon}</span>
+                <span className={isActive ? 'text-[var(--marker-red)]' : 'text-[var(--ink)]/70'}>{tab.icon}</span>
                 <span>{tab.label}</span>
                 {tab.badge && (
                   <span
-                    className={`text-xs px-1.5 py-0.2 rounded-full border border-[#2d2d2d] ${
-                      tab.badge === 'Live' ? 'bg-[#ff4d4d] text-white animate-pulse' : 'bg-[#fff9c4] text-[#2d2d2d]'
+                    className={`text-xs px-1.5 py-0.2 rounded-full border border-[var(--ink)] ${
+                      tab.badge === 'Live' ? 'bg-[var(--marker-red)] text-[var(--surface)] animate-pulse' : 'bg-[var(--postit)] text-[var(--ink)]'
                     }`}
                   >
                     {tab.badge}
                   </span>
                 )}
                 {isActive && (
-                  <div className="absolute -bottom-1.5 left-0 right-0 h-2 bg-white z-20 border-l-2 border-r-2 border-white" />
+                  <div className="absolute -bottom-1.5 left-0 right-0 h-2 bg-[var(--surface)] z-20 border-l-2 border-r-2 border-white" />
                 )}
               </a>
             );

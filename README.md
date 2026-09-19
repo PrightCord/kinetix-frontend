@@ -1,20 +1,58 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+
+# Kinetix Frontend (UI workbench)
+
 </div>
 
-# Run and deploy your AI Studio app
+This is the **standalone React UI workbench** for the [Kinetix](../kinetix) multi-protocol
+LLM proxy. It is where the dashboard's look-and-feel is developed against **demo data**, so
+you can iterate on the interface without running the proxy or a database.
 
-This contains everything you need to run your app locally.
+> The production dashboard that ships embedded in the `kinetix` binary lives in
+> [`../kinetix/dashboard`](../kinetix/dashboard) and talks to the **real** admin API (no mock
+> data). When you land a UI change here, port the changed components into `kinetix/dashboard`.
 
-View your app in AI Studio: https://ai.studio/apps/8b42af75-58c6-489f-8e0f-13094b0c3258
+## What's here
 
-## Run Locally
+- The full hand-drawn dashboard: Virtual Keys, Routes & Fallback, Upstream Providers,
+  Accounts & Pools, Usage & Spend, Request Inspector, Model Aliases, Audit Log.
+- A light/dark/system theme system driven entirely by CSS variables (`src/index.css`) plus a
+  `useTheme()` hook (`src/lib/theme.ts`) and a three-way toggle in the top bar.
+- A Live Proxy Interactive Tester modal.
+- **Demo data** in `src/data/mockData.ts` (seeded providers, models, routes, aliases, keys,
+  usage rows, audit entries, metrics) so every screen is populated out of the box.
 
-**Prerequisites:**  Node.js
+## Run it
 
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Other scripts:
+
+```bash
+npm run build      # production bundle in dist/
+npm run lint       # tsc --noEmit
+```
+
+## Working on the UI
+
+- **Views** live in `src/components/views/`; shared hand-drawn primitives (cards, buttons,
+  badges, tape/thumbtack decorations) in `src/components/HandDrawnElements.tsx`.
+- **Theme**: all colors are CSS variables (`--paper`, `--ink`, `--surface`, `--marker-red`,
+  `--pen-blue`, …) defined in `src/index.css` with a `.dark` override block. Prefer
+  `bg-[var(--surface)]` / `text-[var(--ink)]` style classes over hardcoded hexes so both
+  themes stay correct.
+- **Types** are in `src/types.ts`; **demo data** in `src/data/mockData.ts`.
+
+## Porting a change into the real dashboard
+
+1. Copy the edited component(s) into `../kinetix/dashboard/src/...`.
+2. If the change is data-driven, also update `../kinetix/dashboard/src/lib/mappers.ts`
+   (snake_case API JSON → camelCase view model) and `src/lib/resources.ts` (the typed client
+   over `/admin/api/*`).
+3. Rebuild the embedded bundle:
+   ```bash
+   cd ../kinetix && scripts/build-dashboard.sh    # or: (cd dashboard && npm run build) && touch src/assets.rs && cargo build --release
+   ```

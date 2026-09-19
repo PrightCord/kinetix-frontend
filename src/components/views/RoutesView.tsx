@@ -1,32 +1,32 @@
 import React, { useState } from 'react';
 import { Shuffle, Plus, ArrowDown, Shield, Check, Layers, ArrowRight, Trash2, AlertTriangle } from 'lucide-react';
-import { Combo, Account, ModelConfig } from '../../types';
+import { Route, Account, ModelConfig } from '../../types';
 import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
 import { DESIGN_TOKENS } from '../../lib/designSystem';
 
-interface CombosViewProps {
-  combos: Combo[];
+interface RoutesViewProps {
+  routes: Route[];
   accounts: Account[];
   models: ModelConfig[];
-  onAddCombo: (newCombo: Combo) => void;
-  onUpdateCombo: (updated: Combo) => void;
-  onDeleteCombo: (comboId: string) => void;
+  onAddRoute: (newRoute: Route) => void;
+  onUpdateRoute: (updated: Route) => void;
+  onDeleteRoute: (routeId: string) => void;
 }
 
-export const CombosView: React.FC<CombosViewProps> = ({
-  combos,
+export const RoutesView: React.FC<RoutesViewProps> = ({
+  routes,
   accounts,
   models,
-  onAddCombo,
-  onUpdateCombo,
-  onDeleteCombo,
+  onAddRoute,
+  onUpdateRoute,
+  onDeleteRoute,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedComboId, setSelectedComboId] = useState<string>(combos[0]?.id || '');
-  const [confirmDeleteComboId, setConfirmDeleteComboId] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string>(routes[0]?.id || '');
+  const [confirmDeleteRouteId, setConfirmDeleteRouteId] = useState<string | null>(null);
   const [confirmRemoveTargetId, setConfirmRemoveTargetId] = useState<string | null>(null);
 
-  // New combo form
+  // New route form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [strategy, setStrategy] = useState<'priority' | 'round-robin' | 'weighted'>('priority');
@@ -35,7 +35,7 @@ export const CombosView: React.FC<CombosViewProps> = ({
   const [on5xx, setOn5xx] = useState(true);
   const [sticky, setSticky] = useState(true);
 
-  const activeCombo = combos.find((c) => c.id === selectedComboId) || combos[0];
+  const activeRoute = routes.find((c) => c.id === selectedRouteId) || routes[0];
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,10 +52,10 @@ export const CombosView: React.FC<CombosViewProps> = ({
       priority: idx + 1,
     }));
 
-    const newCombo: Combo = {
-      id: `combo-${Date.now()}`,
+    const newRoute: Route = {
+      id: `route-${Date.now()}`,
       name: name.trim().toLowerCase().replace(/\s+/g, '-'),
-      description: description.trim() || 'Custom fallback combo',
+      description: description.trim() || 'Custom fallback route',
       selectionStrategy: strategy,
       fallbackTriggers: {
         on429,
@@ -70,8 +70,8 @@ export const CombosView: React.FC<CombosViewProps> = ({
       status: 'active',
     };
 
-    onAddCombo(newCombo);
-    setSelectedComboId(newCombo.id);
+    onAddRoute(newRoute);
+    setSelectedRouteId(newRoute.id);
     setShowCreateModal(false);
     setName('');
     setDescription('');
@@ -82,13 +82,13 @@ export const CombosView: React.FC<CombosViewProps> = ({
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-heading font-bold text-[#2d2d2d] flex items-center gap-2">
-            <span>Combos & Automatic Fallback</span>
+          <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+            <span>Routes & Automatic Fallback</span>
             <SketchBadge variant="yellow" rotation="1deg">
               FR-12 Architecture
             </SketchBadge>
           </h2>
-          <p className="text-base font-body text-[#2d2d2d]/80">
+          <p className="text-base font-body text-[var(--ink)]/80">
             Group accounts across providers under one model name. If an account is rate-limited or exhausted, Kinetix falls back automatically before the first byte!
           </p>
         </div>
@@ -100,17 +100,17 @@ export const CombosView: React.FC<CombosViewProps> = ({
           className="gap-2 font-heading font-bold"
         >
           <Plus className="w-5 h-5" />
-          Create New Combo
+          Create New Route
         </SketchButton>
       </div>
 
-      {/* Main Grid: Combos selector on left, Deep Inspector on right */}
-      {combos.length === 0 ? (
-        <WobblyCard decoration="tack" className="p-10 text-center bg-white">
-          <Shuffle className="w-12 h-12 text-[#2d5da1] mx-auto mb-3 opacity-60" />
-          <h3 className="text-2xl font-heading font-bold text-[#2d2d2d]">No Combos Configured</h3>
-          <p className="text-base font-body text-[#2d2d2d]/80 max-w-lg mx-auto mt-2 mb-6">
-            Combos allow you to group multiple upstream provider accounts and models under one seamless model alias. If one account exhausts its quota or hits rate limits, Kinetix instantly retries on the next healthy tier.
+      {/* Main Grid: Routes selector on left, Deep Inspector on right */}
+      {routes.length === 0 ? (
+        <WobblyCard decoration="tack" className="p-10 text-center bg-[var(--surface)]">
+          <Shuffle className="w-12 h-12 text-[var(--pen-blue)] mx-auto mb-3 opacity-60" />
+          <h3 className="text-2xl font-heading font-bold text-[var(--ink)]">No Routes Configured</h3>
+          <p className="text-base font-body text-[var(--ink)]/80 max-w-lg mx-auto mt-2 mb-6">
+            Routes allow you to group multiple upstream provider accounts and models under one seamless model alias. If one account exhausts its quota or hits rate limits, Kinetix instantly retries on the next healthy tier.
           </p>
           <SketchButton
             variant="primary"
@@ -119,105 +119,105 @@ export const CombosView: React.FC<CombosViewProps> = ({
             className="gap-2 font-heading font-bold"
           >
             <Plus className="w-5 h-5" />
-            Create First Fallback Combo
+            Create First Fallback Route
           </SketchButton>
         </WobblyCard>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: List of Combos */}
+          {/* Left Column: List of Routes */}
           <div className="space-y-4">
-            <h3 className="text-xl font-heading font-bold text-[#2d2d2d] flex items-center gap-2">
-              <Shuffle className="w-5 h-5 text-[#2d5da1]" />
-              Configured Combos ({combos.length})
+            <h3 className="text-xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+              <Shuffle className="w-5 h-5 text-[var(--pen-blue)]" />
+              Configured Routes ({routes.length})
             </h3>
 
-            {combos.map((combo, idx) => {
-              const isSelected = combo.id === activeCombo?.id;
+            {routes.map((route, idx) => {
+              const isSelected = route.id === activeRoute?.id;
               const tilt = idx % 2 === 0 ? '-rotate-0.5' : 'rotate-0.5';
 
               return (
                 <div
-                  key={combo.id}
-                  onClick={() => setSelectedComboId(combo.id)}
-                  className={`p-4 border-2 border-[#2d2d2d] cursor-pointer transition-all ${tilt} ${
+                  key={route.id}
+                  onClick={() => setSelectedRouteId(route.id)}
+                  className={`p-4 border-2 border-[var(--ink)] cursor-pointer transition-all ${tilt} ${
                     isSelected
-                      ? 'bg-[#fff9c4] sketch-shadow -translate-y-1 font-bold'
-                      : 'bg-white hover:bg-[#f4efe8] sketch-shadow-sm'
+                      ? 'bg-[var(--postit)] sketch-shadow -translate-y-1 font-bold'
+                      : 'bg-[var(--surface)] hover:bg-[var(--erased-soft)] sketch-shadow-sm'
                   }`}
                   style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="font-mono text-sm px-2 py-0.5 bg-white border border-[#2d2d2d] rounded">
-                        {combo.name}
+                      <span className="font-mono text-sm px-2 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded">
+                        {route.name}
                       </span>
-                      <h4 className="font-heading text-lg mt-1 text-[#2d2d2d]">{combo.description}</h4>
+                      <h4 className="font-heading text-lg mt-1 text-[var(--ink)]">{route.description}</h4>
                     </div>
-                    <SketchBadge variant={combo.status === 'active' ? 'green' : 'red'}>
-                      {combo.status}
+                    <SketchBadge variant={route.status === 'active' ? 'green' : 'red'}>
+                      {route.status}
                     </SketchBadge>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-[#2d2d2d]/20 flex items-center justify-between text-xs font-mono text-[#2d2d2d]/70">
-                    <span>Strategy: <strong>{combo.selectionStrategy}</strong></span>
-                    <span>{combo.targets.length} targets • {combo.totalHops} hops</span>
+                  <div className="mt-3 pt-2 border-t border-[var(--ink)]/20 flex items-center justify-between text-xs font-mono text-[var(--ink)]/70">
+                    <span>Strategy: <strong>{route.selectionStrategy}</strong></span>
+                    <span>{route.targets.length} targets • {route.totalHops} hops</span>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Right Column: Selected Combo Detail & Target Fallback Chain */}
-          {activeCombo && (
+          {/* Right Column: Selected Route Detail & Target Fallback Chain */}
+          {activeRoute && (
             <div className="lg:col-span-2 space-y-5">
               <WobblyCard decoration="tape" className="p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4 mb-4 pb-3 border-b-2 border-dashed border-[#2d2d2d]/30">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/30">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-3xl font-heading font-bold text-[#2d2d2d]">
-                        Combo: <span className="underline decoration-wavy decoration-[#ff4d4d]">{activeCombo.name}</span>
+                      <h3 className="text-3xl font-heading font-bold text-[var(--ink)]">
+                        Route: <span className="underline decoration-wavy decoration-[var(--marker-red)]">{activeRoute.name}</span>
                       </h3>
                       <SketchBadge variant="blue" rotation="-1deg">
-                        {activeCombo.selectionStrategy} strategy
+                        {activeRoute.selectionStrategy} strategy
                       </SketchBadge>
                     </div>
-                    <p className="text-base font-body text-[#2d2d2d]/80 mt-1">
-                      {activeCombo.description}
+                    <p className="text-base font-body text-[var(--ink)]/80 mt-1">
+                      {activeRoute.description}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-mono bg-[#e5e0d8] px-2 py-1 border border-[#2d2d2d] rounded">
-                      Total Fallback Hops: <strong>{activeCombo.totalHops}</strong>
+                    <span className="text-xs font-mono bg-[var(--erased)] px-2 py-1 border border-[var(--ink)] rounded">
+                      Total Fallback Hops: <strong>{activeRoute.totalHops}</strong>
                     </span>
 
-                    {confirmDeleteComboId === activeCombo.id ? (
-                      <div className="flex items-center gap-1.5 bg-[#ffebee] px-2.5 py-1 border border-[#ff4d4d] rounded text-xs font-heading">
-                        <span className="text-[#b71c1c] font-bold">Delete {activeCombo.name}?</span>
+                    {confirmDeleteRouteId === activeRoute.id ? (
+                      <div className="flex items-center gap-1.5 bg-[var(--tint-red)] px-2.5 py-1 border border-[var(--marker-red)] rounded text-xs font-heading">
+                        <span className="text-[var(--danger-text)] font-bold">Delete {activeRoute.name}?</span>
                         <button
                           onClick={() => {
-                            onDeleteCombo(activeCombo.id);
-                            setConfirmDeleteComboId(null);
+                            onDeleteRoute(activeRoute.id);
+                            setConfirmDeleteRouteId(null);
                           }}
-                          className="px-2 py-0.5 bg-[#ff4d4d] text-white rounded font-bold hover:bg-[#d32f2f] cursor-pointer"
+                          className="px-2 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:bg-[var(--marker-red)] cursor-pointer"
                         >
                           Confirm
                         </button>
                         <button
-                          onClick={() => setConfirmDeleteComboId(null)}
-                          className="px-2 py-0.5 bg-white border border-[#2d2d2d] rounded hover:bg-[#e5e0d8] cursor-pointer"
+                          onClick={() => setConfirmDeleteRouteId(null)}
+                          className="px-2 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded hover:bg-[var(--erased)] cursor-pointer"
                         >
                           Cancel
                         </button>
                       </div>
                     ) : (
                       <button
-                        onClick={() => setConfirmDeleteComboId(activeCombo.id)}
-                        className="px-2.5 py-1 text-xs font-heading font-bold text-[#ff4d4d] hover:bg-[#ffebee] border border-[#ff4d4d]/50 hover:border-[#ff4d4d] rounded flex items-center gap-1 cursor-pointer transition-colors"
-                        title="Delete this combo configuration"
+                        onClick={() => setConfirmDeleteRouteId(activeRoute.id)}
+                        className="px-2.5 py-1 text-xs font-heading font-bold text-[var(--marker-red)] hover:bg-[var(--tint-red)] border border-[var(--marker-red)]/50 hover:border-[var(--marker-red)] rounded flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Delete this route configuration"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete Combo</span>
+                        <span>Delete Route</span>
                       </button>
                     )}
                   </div>
@@ -225,65 +225,65 @@ export const CombosView: React.FC<CombosViewProps> = ({
 
                 {/* Targets Fallback Sequence */}
                 <div className="space-y-3 mb-6">
-                  <h4 className="text-lg font-heading font-bold text-[#2d2d2d] flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-[#ff4d4d]" />
+                  <h4 className="text-lg font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-[var(--marker-red)]" />
                     Fallback Target Hierarchy (Priority Ordered)
                   </h4>
 
                   <div className="space-y-3">
-                    {activeCombo.targets.map((tgt, idx) => (
+                    {activeRoute.targets.map((tgt, idx) => (
                       <React.Fragment key={tgt.id}>
                         <div
-                          className="p-4 bg-white border-2 border-[#2d2d2d] sketch-shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 relative"
+                          className="p-4 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3 relative"
                           style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full border-2 border-[#2d2d2d] bg-[#2d5da1] text-white flex items-center justify-center font-heading font-bold text-base">
+                            <div className="w-8 h-8 rounded-full border-2 border-[var(--ink)] bg-[var(--pen-blue)] text-[var(--surface)] flex items-center justify-center font-heading font-bold text-base">
                               #{tgt.priority}
                             </div>
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-heading font-bold text-lg text-[#2d2d2d]">
+                                <span className="font-heading font-bold text-lg text-[var(--ink)]">
                                   {tgt.modelDisplayName}
                                 </span>
-                                <span className="text-xs font-mono bg-[#e5e0d8] px-1.5 py-0.5 rounded border border-[#2d2d2d]/30">
+                                <span className="text-xs font-mono bg-[var(--erased)] px-1.5 py-0.5 rounded border border-[var(--ink)]/30">
                                   {tgt.providerName}
                                 </span>
                               </div>
-                              <p className="text-sm font-body text-[#2d2d2d]/70">
+                              <p className="text-sm font-body text-[var(--ink)]/70">
                                 Serving Account: <strong>{tgt.accountLabel}</strong>
                               </p>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2 text-xs font-mono">
-                            <span className="px-2 py-1 bg-[#e8f5e9] text-[#1b5e20] border border-[#2e7d32] rounded">
+                            <span className="px-2 py-1 bg-[var(--tint-green)] text-[var(--success-text)] border border-[var(--pen-green)] rounded">
                               {idx === 0 ? 'Primary Default' : `Fallback Tier ${idx}`}
                             </span>
 
-                            {activeCombo.targets.length > 1 && (
+                            {activeRoute.targets.length > 1 && (
                               confirmRemoveTargetId === tgt.id ? (
-                                <div className="flex items-center gap-1 bg-[#ffebee] px-2 py-0.5 border border-[#ff4d4d] rounded">
-                                  <span className="text-[#b71c1c] font-bold">Remove tier?</span>
+                                <div className="flex items-center gap-1 bg-[var(--tint-red)] px-2 py-0.5 border border-[var(--marker-red)] rounded">
+                                  <span className="text-[var(--danger-text)] font-bold">Remove tier?</span>
                                   <button
                                     onClick={() => {
-                                      const updatedTargets = activeCombo.targets
+                                      const updatedTargets = activeRoute.targets
                                         .filter((t) => t.id !== tgt.id)
                                         .map((t, i) => ({ ...t, priority: i + 1 }));
-                                      onUpdateCombo({
-                                        ...activeCombo,
+                                      onUpdateRoute({
+                                        ...activeRoute,
                                         targets: updatedTargets,
                                         totalHops: Math.max(0, updatedTargets.length - 1),
                                       });
                                       setConfirmRemoveTargetId(null);
                                     }}
-                                    className="px-1.5 py-0.5 bg-[#ff4d4d] text-white rounded font-bold hover:bg-[#d32f2f] cursor-pointer"
+                                    className="px-1.5 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:bg-[var(--marker-red)] cursor-pointer"
                                   >
                                     Yes
                                   </button>
                                   <button
                                     onClick={() => setConfirmRemoveTargetId(null)}
-                                    className="px-1.5 py-0.5 bg-white border border-[#2d2d2d] rounded cursor-pointer"
+                                    className="px-1.5 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded cursor-pointer"
                                   >
                                     No
                                   </button>
@@ -291,8 +291,8 @@ export const CombosView: React.FC<CombosViewProps> = ({
                               ) : (
                                 <button
                                   onClick={() => setConfirmRemoveTargetId(tgt.id)}
-                                  className="p-1 text-[#ff4d4d] hover:bg-[#ffebee] border border-transparent hover:border-[#ff4d4d]/40 rounded cursor-pointer transition-colors"
-                                  title="Remove this target tier from combo pool"
+                                  className="p-1 text-[var(--marker-red)] hover:bg-[var(--tint-red)] border border-transparent hover:border-[var(--marker-red)]/40 rounded cursor-pointer transition-colors"
+                                  title="Remove this target tier from route pool"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -301,10 +301,10 @@ export const CombosView: React.FC<CombosViewProps> = ({
                           </div>
                         </div>
 
-                        {idx < activeCombo.targets.length - 1 && (
+                        {idx < activeRoute.targets.length - 1 && (
                           <div className="flex justify-center -my-1">
-                            <div className="flex items-center gap-1 bg-[#fff9c4] px-3 py-1 border border-[#2d2d2d] rounded-full text-xs font-mono sketch-shadow-sm z-10">
-                              <ArrowDown className="w-3.5 h-3.5 text-[#ff4d4d]" />
+                            <div className="flex items-center gap-1 bg-[var(--postit)] px-3 py-1 border border-[var(--ink)] rounded-full text-xs font-mono sketch-shadow-sm z-10">
+                              <ArrowDown className="w-3.5 h-3.5 text-[var(--marker-red)]" />
                               <span>Falls back on 429 / Quota / 5xx error</span>
                             </div>
                           </div>
@@ -314,25 +314,25 @@ export const CombosView: React.FC<CombosViewProps> = ({
                   </div>
                 </div>
 
-              {/* Combo Policies & Triggers Settings */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#fdfbf7] p-4 border-2 border-[#2d2d2d] rounded-lg">
+              {/* Route Policies & Triggers Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--paper)] p-4 border-2 border-[var(--ink)] rounded-lg">
                 <div>
-                  <h5 className="font-heading font-bold text-base text-[#2d2d2d] mb-2 flex items-center gap-1">
-                    <Shield className="w-4 h-4 text-[#2d5da1]" />
+                  <h5 className="font-heading font-bold text-base text-[var(--ink)] mb-2 flex items-center gap-1">
+                    <Shield className="w-4 h-4 text-[var(--pen-blue)]" />
                     Configured Fallback Triggers
                   </h5>
                   <div className="space-y-1.5 text-sm font-body">
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={activeCombo.fallbackTriggers.on429}
+                        checked={activeRoute.fallbackTriggers.on429}
                         onChange={(e) =>
-                          onUpdateCombo({
-                            ...activeCombo,
-                            fallbackTriggers: { ...activeCombo.fallbackTriggers, on429: e.target.checked },
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, on429: e.target.checked },
                           })
                         }
-                        className="accent-[#ff4d4d]"
+                        className="accent-[var(--marker-red)]"
                       />
                       <span>Rate limit (HTTP 429) & Cooldown honoring Retry-After</span>
                     </label>
@@ -340,14 +340,14 @@ export const CombosView: React.FC<CombosViewProps> = ({
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={activeCombo.fallbackTriggers.onQuota}
+                        checked={activeRoute.fallbackTriggers.onQuota}
                         onChange={(e) =>
-                          onUpdateCombo({
-                            ...activeCombo,
-                            fallbackTriggers: { ...activeCombo.fallbackTriggers, onQuota: e.target.checked },
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, onQuota: e.target.checked },
                           })
                         }
-                        className="accent-[#ff4d4d]"
+                        className="accent-[var(--marker-red)]"
                       />
                       <span>Quota exhaustion (Daily or Monthly provider caps)</span>
                     </label>
@@ -355,14 +355,14 @@ export const CombosView: React.FC<CombosViewProps> = ({
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={activeCombo.fallbackTriggers.on5xx}
+                        checked={activeRoute.fallbackTriggers.on5xx}
                         onChange={(e) =>
-                          onUpdateCombo({
-                            ...activeCombo,
-                            fallbackTriggers: { ...activeCombo.fallbackTriggers, on5xx: e.target.checked },
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, on5xx: e.target.checked },
                           })
                         }
-                        className="accent-[#ff4d4d]"
+                        className="accent-[var(--marker-red)]"
                       />
                       <span>Upstream 5xx / connection timeout</span>
                     </label>
@@ -370,39 +370,39 @@ export const CombosView: React.FC<CombosViewProps> = ({
                 </div>
 
                 <div>
-                  <h5 className="font-heading font-bold text-base text-[#2d2d2d] mb-2 flex items-center gap-1">
-                    <Check className="w-4 h-4 text-[#2e7d32]" />
+                  <h5 className="font-heading font-bold text-base text-[var(--ink)] mb-2 flex items-center gap-1">
+                    <Check className="w-4 h-4 text-[var(--pen-green)]" />
                     Session & Conversation Continuity
                   </h5>
                   <div className="space-y-2 text-sm font-body">
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={activeCombo.stickyRouting}
+                        checked={activeRoute.stickyRouting}
                         onChange={(e) =>
-                          onUpdateCombo({
-                            ...activeCombo,
+                          onUpdateRoute({
+                            ...activeRoute,
                             stickyRouting: e.target.checked,
                           })
                         }
-                        className="accent-[#2d5da1]"
+                        className="accent-[var(--pen-blue)]"
                       />
                       <span>Sticky routing (Preserves prompt cache while target healthy)</span>
                     </label>
 
                     <div className="pt-1">
-                      <span className="text-xs font-mono text-[#2d2d2d]/70 block mb-1">
+                      <span className="text-xs font-mono text-[var(--ink)]/70 block mb-1">
                         Cross-Provider Content Policy:
                       </span>
                       <select
-                        value={activeCombo.continuityPolicy}
+                        value={activeRoute.continuityPolicy}
                         onChange={(e) =>
-                          onUpdateCombo({
-                            ...activeCombo,
+                          onUpdateRoute({
+                            ...activeRoute,
                             continuityPolicy: e.target.value as any,
                           })
                         }
-                        className="bg-white border border-[#2d2d2d] px-2 py-1 text-xs font-mono rounded w-full"
+                        className="bg-[var(--surface)] border border-[var(--ink)] px-2 py-1 text-xs font-mono rounded w-full"
                       >
                         <option value="strip">Strip proprietary thinking tokens / vendor signatures</option>
                         <option value="convert">Convert where target equivalent exists</option>
@@ -418,41 +418,41 @@ export const CombosView: React.FC<CombosViewProps> = ({
       </div>
     )}
 
-      {/* Create Combo Modal */}
+      {/* Create Route Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
           <div className="w-full max-w-lg">
-            <WobblyCard decoration="tape" className="bg-[#fdfbf7] p-6 relative">
+            <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="absolute top-4 right-4 text-[#2d2d2d] font-bold text-xl hover:text-[#ff4d4d] cursor-pointer"
+                className="absolute top-4 right-4 text-[var(--ink)] font-bold text-xl hover:text-[var(--marker-red)] cursor-pointer"
               >
                 ✕
               </button>
 
-              <h3 className="text-2xl font-heading font-bold text-[#2d2d2d] mb-4 flex items-center gap-2">
-                <Shuffle className="w-6 h-6 text-[#2d5da1]" />
-                Create New Fallback Combo
+              <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+                <Shuffle className="w-6 h-6 text-[var(--pen-blue)]" />
+                Create New Fallback Route
               </h3>
 
               <form onSubmit={handleCreateSubmit} className="space-y-4 font-body">
                 <div>
-                  <label className="block text-sm font-heading font-bold text-[#2d2d2d] mb-1">
-                    Combo Slug Name (Clients request this model)
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Route Slug Name (Clients request this model)
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. coder, fast-chat, vision-combo"
+                    placeholder="e.g. coder, fast-chat, vision-route"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-white border-2 border-[#2d2d2d] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
                     style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-heading font-bold text-[#2d2d2d] mb-1">
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
                     Description
                   </label>
                   <input
@@ -461,19 +461,19 @@ export const CombosView: React.FC<CombosViewProps> = ({
                     placeholder="e.g. Free Gemini tier falling back to paid Gemini and Groq"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full bg-white border-2 border-[#2d2d2d] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
                     style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-heading font-bold text-[#2d2d2d] mb-1">
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
                     Selection Strategy
                   </label>
                   <select
                     value={strategy}
                     onChange={(e) => setStrategy(e.target.value as any)}
-                    className="w-full bg-white border-2 border-[#2d2d2d] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
                     style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
                   >
                     <option value="priority">Priority (Ordered fallback on failure)</option>
@@ -482,13 +482,13 @@ export const CombosView: React.FC<CombosViewProps> = ({
                   </select>
                 </div>
 
-                <div className="p-3 bg-[#fff9c4] border border-[#2d2d2d] rounded space-y-2 text-sm">
+                <div className="p-3 bg-[var(--postit)] border border-[var(--ink)] rounded space-y-2 text-sm">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={on429}
                       onChange={(e) => setOn429(e.target.checked)}
-                      className="accent-[#ff4d4d]"
+                      className="accent-[var(--marker-red)]"
                     />
                     <span>Fallback automatically on 429 Rate Limit</span>
                   </label>
@@ -498,7 +498,7 @@ export const CombosView: React.FC<CombosViewProps> = ({
                       type="checkbox"
                       checked={onQuota}
                       onChange={(e) => setOnQuota(e.target.checked)}
-                      className="accent-[#ff4d4d]"
+                      className="accent-[var(--marker-red)]"
                     />
                     <span>Fallback on Quota Exhaustion</span>
                   </label>
@@ -508,7 +508,7 @@ export const CombosView: React.FC<CombosViewProps> = ({
                       type="checkbox"
                       checked={sticky}
                       onChange={(e) => setSticky(e.target.checked)}
-                      className="accent-[#2d5da1]"
+                      className="accent-[var(--pen-blue)]"
                     />
                     <span>Enable sticky session routing (Prompt cache preservation)</span>
                   </label>
@@ -523,7 +523,7 @@ export const CombosView: React.FC<CombosViewProps> = ({
                     Cancel
                   </SketchButton>
                   <SketchButton type="submit" variant="danger" className="font-bold">
-                    Create Combo
+                    Create Route
                   </SketchButton>
                 </div>
               </form>
