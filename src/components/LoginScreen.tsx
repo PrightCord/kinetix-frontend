@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Lock, User, Eye, EyeOff, ShieldCheck, KeyRound, Sparkles, ArrowRight } from 'lucide-react';
+import { Lock, Eye, EyeOff, ShieldCheck, KeyRound, ArrowRight } from 'lucide-react';
 import { WobblyCard, SketchButton, SketchBadge } from './HandDrawnElements';
 import { DESIGN_TOKENS } from '../lib/designSystem';
+import { Kinetix } from '../lib/resources';
 
 interface LoginScreenProps {
   onLogin?: (username: string) => void;
@@ -9,10 +10,8 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSuccess }) => {
-  const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -24,38 +23,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const trimmedUser = username.trim();
     const trimmedPass = password.trim();
-
-    if (!trimmedUser) {
-      setError('Please provide a valid username or email.');
-      return;
-    }
-
     if (!trimmedPass) {
-      setError('Please enter your administrator password.');
+      setError('Please enter the admin token.');
       return;
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      notifySuccess(trimmedUser);
+    try {
+      const r = await Kinetix.login(trimmedPass);
+      notifySuccess(r.user || 'admin');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
       setIsSubmitting(false);
-    }, 400);
-  };
-
-  const handleQuickDemoLogin = () => {
-    setUsername('admin');
-    setPassword('kinetix');
-    setIsSubmitting(true);
-    setTimeout(() => {
-      notifySuccess('admin');
-      setIsSubmitting(false);
-    }, 300);
+    }
   };
 
   return (
@@ -132,34 +118,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
-                htmlFor="login-username"
-                className="block text-sm font-heading font-bold text-[var(--ink)] mb-1"
-              >
-                Username or Admin Email
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--ink)]/60">
-                  <User className="w-4 h-4" />
-                </div>
-                <input
-                  id="login-username"
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin or admin@kinetix.local"
-                  className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] pl-9 pr-3 py-2 text-base font-mono sketch-shadow-sm focus:outline-none focus:bg-[var(--tint-yellow)]"
-                  style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
                 htmlFor="login-password"
                 className="block text-sm font-heading font-bold text-[var(--ink)] mb-1"
               >
-                Admin Password
+                Admin Token
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--ink)]/60">
@@ -169,9 +131,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password..."
+                  placeholder="KINETIX_ADMIN_TOKEN…"
                   className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] pl-9 pr-10 py-2 text-base font-mono sketch-shadow-sm focus:outline-none focus:bg-[var(--tint-yellow)]"
                   style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
                 />
@@ -179,26 +142,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--ink)]/60 hover:text-[var(--ink)] cursor-pointer"
-                  title={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide token' : 'Show token'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs font-mono pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 accent-[var(--marker-red)] border-2 border-[var(--ink)]"
-                />
-                <span className="text-[var(--ink)]">Remember session</span>
-              </label>
-              <span className="text-[var(--pen-blue)] underline decoration-dotted cursor-help" title="Default password is 'kinetix'">
-                Need credentials?
-              </span>
+              <p className="text-xs text-[var(--ink)]/60 mt-1 font-body">
+                The value of <code className="font-mono">KINETIX_ADMIN_TOKEN</code> configured on the server.
+              </p>
             </div>
 
             {/* Buttons */}
@@ -215,15 +166,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
                 {isSubmitting ? 'Verifying Gateway...' : 'Unlock Gateway Dashboard'}
                 <ArrowRight className="w-4 h-4" />
               </SketchButton>
-
-              <button
-                type="button"
-                onClick={handleQuickDemoLogin}
-                className="w-full py-2 px-3 bg-[var(--postit)] hover:bg-[var(--tint-yellow)] text-[var(--ink)] border-2 border-[var(--ink)] rounded font-heading font-bold text-sm sketch-shadow-sm flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-[var(--marker-orange)]" />
-                ⚡ One-Click Demo Login (admin / kinetix)
-              </button>
             </div>
           </form>
 
@@ -231,12 +173,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
           <div className="mt-6 pt-4 border-t-2 border-dashed border-[var(--ink)]/30">
             <div className="p-3 bg-[var(--tint-orange)] border border-[var(--ink)] rounded-md text-xs font-mono text-[var(--ink)]/80 relative">
               <span className="font-heading font-bold text-[var(--warn-text)] block mb-1">
-                📌 Quick Access Note:
+                📌 Authentication Note:
               </span>
-              <div>Username: <strong className="text-[var(--ink)]">admin</strong></div>
-              <div>Password: <strong className="text-[var(--ink)]">kinetix</strong> (or any password)</div>
+              <div>
+                Sessions are signed server-side and stored in an httpOnly cookie.
+              </div>
               <div className="mt-1 text-[11px] text-[var(--ink)]/60">
-                🔒 All audit logs will record actions under this authenticated account.
+                🔒 All audit logs record actions under the authenticated admin session.
               </div>
             </div>
           </div>
@@ -245,7 +188,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onLoginSucces
 
       <div className="text-xs font-mono text-[var(--ink)]/60 text-center relative z-10 flex items-center gap-1.5">
         <ShieldCheck className="w-4 h-4 text-[var(--pen-green)]" />
-        Kinetix LLM Gateway v1.2 • End-to-end Local Encryption
+        Kinetix LLM Gateway v0.1 • End-to-end Local Encryption
       </div>
     </div>
   );
