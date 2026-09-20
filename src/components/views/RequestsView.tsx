@@ -1,17 +1,41 @@
 import React, { useState } from 'react';
 import { Radio, Search, Filter, CheckCircle2, AlertTriangle, ArrowRight, Eye, Sparkles } from 'lucide-react';
-import { RequestLog } from '../../types';
+import { LiveRequest, RequestLog } from '../../types';
 import { WobblyCard, SketchBadge, SketchButton } from '../HandDrawnElements';
 import { formatCurrency, formatLatency } from '../../lib/designSystem';
 
 interface RequestsViewProps {
   requests: RequestLog[];
+  liveRequests?: LiveRequest[];
 }
 
-export const RequestsView: React.FC<RequestsViewProps> = ({ requests }) => {
+export const RequestsView: React.FC<RequestsViewProps> = ({ requests, liveRequests = [] }) => {
   const [filterText, setFilterText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'fallback_recovered' | 'rate_limited'>('all');
   const [selectedRequest, setSelectedRequest] = useState<RequestLog | null>(null);
+  const [trace, setTrace] = useState<any | null>(null);
+  const [diagnostics, setDiagnostics] = useState<any | null>(null);
+  const [panel, setPanel] = useState<'trace' | 'diagnostics' | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+
+  const loadTrace = () => {
+    if (!selectedRequest) return;
+    setPanelError(null);
+    setPanel('trace');
+    fetch(`/admin/api/requests/${selectedRequest.requestId}/route-trace`, { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(setTrace)
+      .catch((e) => setPanelError(`Route trace unavailable (${e}).`));
+  };
+  const loadDiagnostics = () => {
+    if (!selectedRequest) return;
+    setPanelError(null);
+    setPanel('diagnostics');
+    fetch(`/admin/api/requests/${selectedRequest.requestId}/diagnostics`, { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(setDiagnostics)
+      .catch((e) => setPanelError(`Diagnostics unavailable (${e}).`));
+  };
 
   const filtered = requests.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -70,6 +94,74 @@ export const RequestsView: React.FC<RequestsViewProps> = ({ requests }) => {
           </select>
         </div>
       </div>
+
+
+      {/* Live in-flight view (FR-8.3): metadata-only, no bodies. */}
+      <WobblyCard decoration="tack-blue" className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+            <Radio className="w-4 h-4 text-[var(--marker-red)] animate-pulse" />
+            In-Flight Requests
+          </h3>
+          <span className="text-xs font-mono text-[var(--ink)]/60">
+            {liveRequests.filter((l) => !l.finished).length} active
+          </span>
+        </div>
+        {liveRequests.length === 0 ? (
+          <p className="text-sm font-body text-[var(--ink)]/60">
+            No in-flight requests right now. Send one through the Live Proxy Test to watch it
+            commit, stream, and finalize here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead className="text-[var(--ink)]/70 font-heading">
+                <tr>
+                  <th className="py-1 pr-3">Phase</th>
+                  <th className="py-1 pr-3">Request ID</th>
+                  <th className="py-1 pr-3">Key</th>
+                  <th className="py-1 pr-3">Model</th>
+                  <th className="py-1 pr-3">Fallback</th>
+                  <th className="py-1 pr-3">TTFT</th>
+                  <th className="py-1 pr-3">In / Out</th>
+                  <th className="py-1 pr-3">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveRequests.map((l) => (
+                  <tr key={l.requestId} className="border-t border-[var(--ink)]/15">
+                    <td className="py-1 pr-3">
+                      {l.finished ? (
+                        <SketchBadge variant={l.status === 'success' ? 'green' : 'red'}>
+                          {l.status}
+                        </SketchBadge>
+                      ) : (
+                        <SketchBadge variant="blue">{l.phase}</SketchBadge>
+                      )}
+                    </td>
+                    <td className="py-1 pr-3 truncate max-w-[160px]">{l.requestId}</td>
+                    <td className="py-1 pr-3">{l.keyName || '—'}</td>
+                    <td className="py-1 pr-3">
+                      {l.requestedModel}
+                      {l.routeName ? ` (${l.routeName})` : ''}
+                    </td>
+                    <td className="py-1 pr-3">
+                      {l.fallbackHops > 0 ? `⚡ ${l.fallbackHops}` : '—'}
+                    </td>
+                    <td className="py-1 pr-3">{l.ttftMs != null ? formatLatency(l.ttftMs) : '—'}</td>
+                    <td className="py-1 pr-3">
+                      {l.inputTokens ?? '?'} / {l.outputTokens ?? '?'}
+                    </td>
+                    <td className="py-1 pr-3">
+                      {l.finished ? formatLatency(l.latencyMs) : 'streaming…'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </WobblyCard>
 
       {/* Requests Table */}
       <WobblyCard decoration="tape" className="p-0 overflow-hidden">
@@ -223,19 +315,22 @@ export const RequestsView: React.FC<RequestsViewProps> = ({ requests }) => {
                   )}
                 </div>
 
-                {/* HTTP Headers returned by Prism / Kinetix */}
+                {/* HTTP Headers returned by Kinetix */}
                 <div className="bg-[var(--paper)] p-3 border border-[var(--ink)] rounded text-xs font-mono space-y-1">
                   <strong className="font-heading text-sm text-[var(--ink)] block mb-1">
                     Response Headers Injected by Kinetix
                   </strong>
                   <div><code>X-Request-Id: {selectedRequest.requestId}</code></div>
-                  <div><code>X-Prism-Cache: {selectedRequest.cacheStatus}</code></div>
-                  <div><code>X-Prism-Served-By: {selectedRequest.servingAccount} ({selectedRequest.servingProvider})</code></div>
+                  <div><code>X-Kinetix-Cache: {selectedRequest.cacheStatus}</code></div>
+                  <div><code>X-Kinetix-Route-Id: {selectedRequest.opaqueRouteId || '(none)'}</code> <span className="text-[var(--ink)]/50">(opaque; serving topology is admin-only)</span></div>
                   {selectedRequest.fallbackHops > 0 && (
                     <div className="text-[var(--marker-red)] font-bold">
-                      <code>X-Prism-Fallback: true (Hops: {selectedRequest.fallbackHops})</code>
+                      <code>X-Kinetix-Fallback: true (Hops: {selectedRequest.fallbackHops})</code>
                     </div>
                   )}
+                  <div>
+                    <code>Usage: {selectedRequest.usageConfidence} | commit: {selectedRequest.commitState || 'n/a'} | retries: {selectedRequest.retryCount}</code>
+                  </div>
                 </div>
 
                 {/* Fallback Path Trace */}
@@ -260,14 +355,19 @@ export const RequestsView: React.FC<RequestsViewProps> = ({ requests }) => {
                 )}
               </div>
 
-              {/* Payload Snippets */}
+              {/* Payload Snippets. Request/response bodies are not persisted by
+                  default (privacy, FR-9.x); only metadata is retained. */}
               <div className="space-y-4 text-xs font-mono">
                 <div>
                   <strong className="font-heading text-base text-[var(--ink)] block mb-1">
                     Client Prompt Preview
                   </strong>
                   <div className="p-3 bg-[var(--surface)] border-2 border-[var(--ink)] rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
-                    {selectedRequest.promptPreview}
+                    {selectedRequest.promptPreview || (
+                      <span className="text-[var(--ink)]/50 font-body text-sm">
+                        Bodies are not stored by default. Enable body logging on the virtual key to capture short-retention previews.
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -276,19 +376,83 @@ export const RequestsView: React.FC<RequestsViewProps> = ({ requests }) => {
                     Upstream Streamed Completion
                   </strong>
                   <div className="p-3 bg-[var(--surface)] border-2 border-[var(--ink)] rounded max-h-40 overflow-y-auto whitespace-pre-wrap">
-                    {selectedRequest.responsePreview}
+                    {selectedRequest.responsePreview || (
+                      <span className="text-[var(--ink)]/50 font-body text-sm">
+                        Not captured (body logging disabled).
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end">
+              <div className="pt-4 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex gap-2">
+                  <SketchButton variant="secondary" onClick={loadTrace}>
+                    Route Trace
+                  </SketchButton>
+                  <SketchButton variant="secondary" onClick={loadDiagnostics}>
+                    Diagnostics
+                  </SketchButton>
+                </div>
                 <SketchButton
                   variant="secondary"
-                  onClick={() => setSelectedRequest(null)}
+                  onClick={() => {
+                    setSelectedRequest(null);
+                    setPanel(null);
+                    setTrace(null);
+                    setDiagnostics(null);
+                  }}
                 >
                   Close Inspector
                 </SketchButton>
               </div>
+
+              {panelError && (
+                <div className="mt-3 text-sm text-[var(--marker-red)] font-mono">{panelError}</div>
+              )}
+
+              {panel === 'trace' && trace && (
+                <div className="mt-4 border-t-2 border-dashed border-[var(--ink)]/20 pt-4">
+                  <div className="text-sm font-bold text-[var(--pen-blue)] mb-2">
+                    Route Trace · outcome: {trace.outcome} · commit: {trace.commit_state}
+                  </div>
+                  <div className="font-mono text-xs space-y-1">
+                    {(trace.steps || []).map((s: any, i: number) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-[var(--ink)]/50 w-20 shrink-0">{s.elapsed_ms}ms</span>
+                        <SketchBadge variant={s.stage === 'skip' ? 'red' : s.stage === 'commit' ? 'green' : 'blue'}>
+                          {s.stage}
+                        </SketchBadge>
+                        <span className="flex-1">
+                          {s.target ? <b>{s.target}</b> : null} {s.detail}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {(trace.warnings || []).length > 0 && (
+                    <div className="mt-3 text-xs text-[var(--marker-orange)]">
+                      ⚠ {(trace.warnings || []).join('; ')}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {panel === 'diagnostics' && diagnostics && (
+                <div className="mt-4 border-t-2 border-dashed border-[var(--ink)]/20 pt-4">
+                  <div className="text-sm font-bold text-[var(--pen-blue)] mb-2">
+                    Flight Recorder · {diagnostics.flight_events?.length || 0} events
+                  </div>
+                  <div className="font-mono text-xs space-y-1">
+                    {(diagnostics.flight_events || []).map((e: any, i: number) => (
+                      <div key={i} className="flex gap-2">
+                        <span className="text-[var(--ink)]/50 w-16 shrink-0">{e.elapsed_ms}ms</span>
+                        <span className="text-[var(--pen-green)] w-44 shrink-0">{e.event}</span>
+                        <span className="flex-1">{e.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </WobblyCard>
           </div>
         </div>
