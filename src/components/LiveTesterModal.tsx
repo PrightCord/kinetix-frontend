@@ -97,7 +97,7 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
 
     if (DEMO_MODE) {
       const chosen = models.find((m) => m.upstreamModelId === effectiveTarget || m.id === effectiveTarget) ?? models[0];
-      setOutput(`Demo response from ${chosen?.displayName ?? effectiveTarget || 'Kinetix'}: Testing`);
+      setOutput(`Demo response from ${chosen?.displayName ?? effectiveTarget ?? 'Kinetix'}: Testing`);
       setMeta({
         servingAccount: 'Demo credential pool',
         servingProvider: chosen?.providerName ?? 'Demo Provider',
