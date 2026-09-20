@@ -1,4 +1,4 @@
-export type WireFormat = 'openai' | 'anthropic' | 'gemini';
+export type WireFormat = 'openai' | 'anthropic' | 'gemini' | 'plugin';
 
 export interface VirtualKey {
   id: string;
@@ -7,6 +7,7 @@ export interface VirtualKey {
   owner: string;
   tag: string;
   allowedModels: string[]; // ['*'] or list of model IDs / aliases / routes
+  allowedProviders: string[]; // [] = no provider restriction (FR-12.19)
   rpmLimit: number;
   tpmLimit: number;
   dailyBudget: number; // USD
@@ -33,8 +34,18 @@ export interface Provider {
   modelsCount: number;
   accountsCount: number;
   extraHeaders?: Record<string, string>;
+  modelsPath?: string;
   timeoutMs: number;
   capabilityMode: 'permissive' | 'strict';
+  followRedirects?: boolean;
+  credentialHosts?: string;
+  allowInsecureTls?: boolean;
+  wirePlugin?: string;
+  credentialPlugin?: string;
+  modelSourcePlugin?: string;
+  /** Write-only: a credential supplied when adding/editing (never returned by the API). */
+  apiKey?: string;
+  accountLabel?: string;
   lastPingMs: number;
 }
 
@@ -118,6 +129,8 @@ export interface Route {
   };
   targets: RouteTarget[];
   continuityPolicy: 'strip' | 'convert' | 'error';
+  portabilityPolicy: 'reject' | 'strip_with_warning';
+  cacheAffinity: boolean;
   stickyRouting: boolean;
   totalHops: number;
   status: 'active' | 'degraded' | 'all_exhausted';
@@ -156,8 +169,30 @@ export interface RequestLog {
   cacheStatus: 'hit' | 'miss' | 'bypass';
   servingAccount: string;
   servingProvider: string;
+  opaqueRouteId: string;
+  usageConfidence: 'provider_reported' | 'estimated' | 'unknown';
+  commitState: string;
+  retryCount: number;
   promptPreview: string;
   responsePreview: string;
+}
+
+export interface LiveRequest {
+  requestId: string;
+  keyName?: string | null;
+  frontend: string;
+  requestedModel: string;
+  routeName?: string | null;
+  phase: 'selecting' | 'streaming' | 'committed' | 'done';
+  commitState: string;
+  fallbackHops: number;
+  retryCount: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  status: string;
+  latencyMs: number;
+  ttftMs?: number | null;
+  finished: boolean;
 }
 
 export interface AuditLog {
