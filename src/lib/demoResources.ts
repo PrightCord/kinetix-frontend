@@ -368,6 +368,120 @@ const catalogEntry = (plugin: any) => ({
   note: 'Demo catalog entry',
 });
 
+const demoClientProfileModels = (keyId: string) => {
+  const key: any = keys.find((entry: any) => entry.id === keyId);
+  if (!key || key.status !== 'active') return [];
+  const grants = Array.isArray(key.allowedModels) ? key.allowedModels : [];
+  const routeNames = routes
+    .filter((route: any) => route.enabled !== false)
+    .map((route: any) => route.name)
+    .filter(Boolean);
+  const ids = grants.includes('*') ? routeNames : grants;
+  return Array.from(new Set(ids)).map((id) => ({ id: String(id) }));
+};
+
+const demoShellQuote = (value: string) => "'" + value.replace(/'/g, "'\\''") + "'";
+
+const demoApiKeyFile = (apiKey: string) => ({
+  filename: 'kinetix-api-key.sh',
+  destination: null,
+  content_type: 'text/x-shellscript',
+  content: '# Source this file in the shell that starts your client.\nexport KINETIX_API_KEY=' + demoShellQuote(apiKey) + '\n',
+});
+
+const demoClientProfileFiles = (client: string, model: string, apiKeyValue?: string) => {
+  const trimmed = publicBaseUrl.trim().replace(/\/+$/, '');
+  const root = trimmed.endsWith('/v1') ? trimmed.slice(0, -3).replace(/\/+$/, '') : trimmed;
+  const openaiBaseUrl = root + '/v1';
+  const apiKey = apiKeyValue?.trim() || 'sk-kinetix-<paste-your-key>';
+
+  if (client === 'pi') {
+    return [
+      {
+        filename: 'models.json',
+        destination: '~/.pi/agent/models.json',
+        content_type: 'application/json',
+        content: JSON.stringify({
+          providers: {
+            kinetix: {
+              baseUrl: openaiBaseUrl,
+              apiKey: '$KINETIX_API_KEY',
+              api: 'openai-completions',
+              models: [{ id: model, name: model }],
+            },
+          },
+        }, null, 2),
+      },
+      {
+        filename: 'settings.json',
+        destination: '~/.pi/agent/settings.json',
+        content_type: 'application/json',
+        content: JSON.stringify({ defaultProvider: 'kinetix', defaultModel: model }, null, 2),
+      },
+      demoApiKeyFile(apiKey),
+    ];
+  }
+
+  if (client === 'claude_code') {
+    return [{
+      filename: 'kinetix-claude.sh',
+      destination: null,
+      content_type: 'text/x-shellscript',
+      content: [
+        '#!/usr/bin/env bash',
+        'set -euo pipefail',
+        '',
+        'export ANTHROPIC_BASE_URL=' + demoShellQuote(root),
+        'export ANTHROPIC_API_KEY=' + demoShellQuote(apiKey),
+        "export ANTHROPIC_AUTH_TOKEN=''",
+        '',
+        'exec claude --model ' + demoShellQuote(model) + ' "$@"',
+        '',
+      ].join('\n'),
+    }];
+  }
+
+  if (client === 'codex') {
+    const config = [
+      'model = ' + JSON.stringify(model),
+      'model_provider = "kinetix"',
+      '',
+      '[model_providers.kinetix]',
+      'name = "Kinetix"',
+      'base_url = ' + JSON.stringify(openaiBaseUrl),
+      'env_key = "KINETIX_API_KEY"',
+      'wire_api = "responses"',
+      'requires_openai_auth = false',
+      '',
+    ].join('\n');
+    return [
+      { filename: 'config.toml', destination: '~/.codex/config.toml', content_type: 'application/toml', content: config },
+      demoApiKeyFile(apiKey),
+    ];
+  }
+
+  return [
+    {
+      filename: 'opencode.json',
+      destination: 'opencode.json',
+      content_type: 'application/json',
+      content: JSON.stringify({
+        $schema: 'https://opencode.ai/config.json',
+        model: 'kinetix/default',
+        provider: {
+          kinetix: {
+            name: 'Kinetix',
+            npm: '@ai-sdk/openai-compatible',
+            options: { baseURL: openaiBaseUrl, apiKey: '{env:KINETIX_API_KEY}' },
+            models: { default: { id: model, name: model } },
+          },
+        },
+      }, null, 2),
+    },
+    demoApiKeyFile(apiKey),
+  ];
+};
+
 const pluginSettings = new Map<string, any>();
 
 export const DemoKinetix: any = {
@@ -461,6 +575,35 @@ export const DemoKinetix: any = {
   deleteKey: (id: string) => {
     keys = keys.filter((key: any) => key.id !== id);
     return ok({ ok: true });
+  },
+
+  clientProfileModels: (keyId: string) => {
+    const key: any = keys.find((entry: any) => entry.id === keyId);
+    if (!key) return Promise.reject(new Error('Virtual key not found.'));
+    if (key.status !== 'active') return Promise.reject(new Error('Virtual key is not active.'));
+    return ok({ models: demoClientProfileModels(keyId) });
+  },
+  generateClientProfile: (body: any) => {
+    const key: any = keys.find((entry: any) => entry.id === body.key_id);
+    if (!key) return Promise.reject(new Error('Virtual key not found.'));
+    if (key.status !== 'active') return Promise.reject(new Error('Virtual key is not active.'));
+    const visible = demoClientProfileModels(body.key_id);
+    if (!visible.some((entry: any) => entry.id === body.model)) {
+      return Promise.reject(new Error('Selected model or Route is not available to this key.'));
+    }
+    const supplied = typeof body.api_key === 'string' ? body.api_key.trim() : '';
+    if (supplied && !supplied.startsWith('sk-kinetix-')) {
+      return Promise.reject(new Error('The supplied value is not a Kinetix virtual key.'));
+    }
+    if (supplied && key.key && supplied !== key.key) {
+      return Promise.reject(new Error('The supplied virtual key does not match the selected key.'));
+    }
+    return ok({
+      client: body.client,
+      model: body.model,
+      public_base_url: publicBaseUrl.replace(/\/+$/, ''),
+      files: demoClientProfileFiles(body.client, body.model, supplied || undefined),
+    });
   },
 
   providers: () => ok(clone(providers)),
