@@ -1,8 +1,23 @@
 import React, { useState } from 'react';
-import { Users, Plus, ShieldCheck, Clock, AlertTriangle, RefreshCw, KeyRound, Sparkles, Trash2, Search, X, Sliders } from 'lucide-react';
+import {
+  Users,
+  Plus,
+  ShieldCheck,
+  Clock,
+  AlertTriangle,
+  RefreshCw,
+  KeyRound,
+  Trash2,
+  Search,
+  X,
+  Sliders,
+  CheckCircle2,
+  Play,
+  Lock,
+} from 'lucide-react';
 import { Account, Provider } from '../../types';
-import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
-import { formatCurrency, formatTokens, DESIGN_TOKENS } from '../../lib/designSystem';
+import { Card, Button, StatusBadge, Input, Select } from '../KinetixUI';
+import { formatCurrency, formatTokens } from '../../lib/designSystem';
 import { Kinetix, TestResult } from '../../lib/resources';
 import { useAuthEnrollment } from '../CredentialAuthFlow';
 
@@ -102,654 +117,549 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
     };
 
     onAddAccount(newAcc);
-    setShowAddModal(false);
     setLabel('');
     setApiKey('');
+    setAccountValidation(null);
+    setShowAddModal(false);
   };
 
-  const probeAccount = async (acc: Account, resetOnSuccess = false) => {
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAccount) return;
+
+    const parsedQuota = editQuota === '' ? null : parseFloat(editQuota);
+    onUpdateAccount({
+      ...editingAccount,
+      label: editLabel.trim(),
+      priority: editPriority,
+      weight: editWeight,
+      quotaType: editQuotaType,
+      softQuotaSpendLimit: parsedQuota != null && !Number.isNaN(parsedQuota) ? parsedQuota : null,
+    });
+    setEditingAccount(null);
+  };
+
+  const probeAccount = async (acc: Account, clearCooldown = false) => {
     setTestingAccountId(acc.id);
     try {
       const result = await Kinetix.testAccount(acc.id);
-      setTestResults((current) => ({ ...current, [acc.id]: result }));
-      if (resetOnSuccess && result.ok) {
+      setTestResults((prev) => ({ ...prev, [acc.id]: result }));
+      if (clearCooldown && result.ok) {
         onResetAccount(acc.id);
       }
     } catch (e) {
-      setTestResults((current) => ({
-        ...current,
-        [acc.id]: {
-          ok: false,
-          status: 0,
-          error: e instanceof Error ? e.message : String(e),
-        },
+      setTestResults((prev) => ({
+        ...prev,
+        [acc.id]: { ok: false, status: 500, error: (e as Error).message },
       }));
     } finally {
       setTestingAccountId(null);
     }
   };
 
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const filteredAccounts = accounts.filter((acc) => {
-    if (!normalizedSearch) return true;
-    return [acc.id, acc.label, acc.providerName, acc.keyMasked, acc.status]
-      .some((value) => String(value ?? '').toLowerCase().includes(normalizedSearch));
-  });
-
-  const visibleProviders = providers.filter((provider) =>
-    providerFilter === 'all' || provider.id === providerFilter,
-  );
-  const orphanAccounts = filteredAccounts.filter(
-    (account) => !providers.some((provider) => provider.id === account.providerId),
-  );
-
-  const openAddForProvider = (id: string) => {
-    setProviderId(id);
+  const openAddForProvider = (targetProviderId: string) => {
+    setProviderId(targetProviderId);
+    setAccountValidation(null);
     setShowAddModal(true);
   };
 
-  const openConfigure = (acc: Account) => {
-    setEditingAccount(acc);
-    setEditLabel(acc.label);
-    setEditPriority(acc.priority);
-    setEditWeight(acc.weight || 1);
-    setEditQuota(acc.softQuotaSpendLimit == null ? '' : String(acc.softQuotaSpendLimit));
-    setEditQuotaType(acc.quotaType);
-  };
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredAccounts = accounts.filter((acc) => {
+    if (providerFilter !== 'all' && acc.providerId !== providerFilter) return false;
+    if (!normalizedSearch) return true;
+    return (
+      acc.label.toLowerCase().includes(normalizedSearch) ||
+      acc.providerName.toLowerCase().includes(normalizedSearch) ||
+      acc.keyMasked.toLowerCase().includes(normalizedSearch)
+    );
+  });
 
-  const handleConfigureSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingAccount || !editLabel.trim() || editPriority < 1 || editWeight < 1) return;
-    const quota = editQuota.trim() === '' ? undefined : Number(editQuota);
-    if (quota !== undefined && (!Number.isFinite(quota) || quota < 0)) return;
-    onUpdateAccount({
-      ...editingAccount,
-      label: editLabel.trim(),
-      priority: Math.trunc(editPriority),
-      weight: Math.trunc(editWeight),
-      softQuotaSpendLimit: quota,
-      quotaType: editQuotaType,
-    });
-    setEditingAccount(null);
-  };
+  const visibleProviders =
+    providerFilter === 'all'
+      ? providers
+      : providers.filter((p) => p.id === providerFilter);
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
-            <span>Key Pool & Accounts Health</span>
-            <SketchBadge variant="yellow" rotation="-1deg">
-              FR-4 & FR-12
-            </SketchBadge>
+          <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Account Pools &amp; Credentials
           </h2>
-          <p className="text-base font-body text-[var(--ink)]/80">
-            Accounts represent provider credentials when a provider needs them. Manual keys, sign-in flows, and credential-free providers use separate enrollment paths.
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            Industrial account rotation, priority tiers, rate-limit backoff, and soft quota monitoring.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          <div className="relative min-w-0 sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ink)]/50" />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search accounts…"
-              className="w-full pl-9 pr-9 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
-              style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--ink)]/60 hover:text-[var(--marker-red)] cursor-pointer"
-                title="Clear search"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          {providers.some((provider) => provider.credentialMode === 'manual') && (
-            <SketchButton
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search accounts or keys…"
+            icon={<Search className="w-3.5 h-3.5" />}
+            className="w-full sm:w-56"
+            mono
+          />
+
+          {providers.some((p) => p.credentialMode === 'manual') && (
+            <Button
               variant="primary"
-              size="md"
+              size="sm"
               onClick={() => {
-                const provider = providers.find((item) => item.credentialMode === 'manual');
-                if (provider) openAddForProvider(provider.id);
+                const manualProv = providers.find((p) => p.credentialMode === 'manual');
+                if (manualProv) openAddForProvider(manualProv.id);
               }}
-              className="gap-2 font-heading font-bold whitespace-nowrap"
+              className="shrink-0 whitespace-nowrap"
             >
-              <Plus className="w-5 h-5" />
-              Add API Key
-            </SketchButton>
+              <Plus className="w-3.5 h-3.5" />
+              Add Key
+            </Button>
           )}
         </div>
       </div>
 
       {authEnrollment.modal}
+
       {enrollmentError && (
-        <div className="p-3 bg-[var(--tint-red)] border-2 border-[var(--marker-red)] text-sm font-mono text-[var(--danger-text)]">
+        <div className="p-3 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-[4px] text-xs font-mono text-[var(--danger)]">
           {enrollmentError}
         </div>
       )}
       {enrollmentNotice && (
-        <div className="p-3 bg-[var(--tint-green)] border-2 border-[var(--pen-green)] text-sm font-mono text-[var(--success-text)]">
+        <div className="p-3 bg-[var(--healthy-bg)] border border-[var(--healthy-border)] rounded-[4px] text-xs font-mono text-[var(--healthy)]">
           {enrollmentNotice}
         </div>
       )}
 
+      {/* Provider Filter Tabs */}
       {providers.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-mono text-[var(--ink)]/60">Pool:</span>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border)] pb-2 text-xs font-mono">
           <button
             onClick={() => setProviderFilter('all')}
-            className={`px-3 py-1.5 text-xs font-heading font-bold border border-[var(--ink)] rounded cursor-pointer ${
-              providerFilter === 'all' ? 'bg-[var(--postit)] sketch-shadow-sm' : 'bg-[var(--surface)]'
+            className={`px-2.5 py-1 rounded-[3px] transition-colors cursor-pointer ${
+              providerFilter === 'all'
+                ? 'bg-[var(--surface-raised)] text-[var(--text-primary)] font-semibold border border-[var(--border-strong)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            All Providers
+            All Pools ({accounts.length})
           </button>
-          {providers.map((provider) => (
-            <button
-              key={provider.id}
-              onClick={() => setProviderFilter(provider.id)}
-              className={`px-3 py-1.5 text-xs font-heading font-bold border border-[var(--ink)] rounded cursor-pointer ${
-                providerFilter === provider.id ? 'bg-[var(--postit)] sketch-shadow-sm' : 'bg-[var(--surface)]'
-              }`}
-            >
-              {provider.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Provider account pools */}
-      {normalizedSearch && filteredAccounts.length === 0 && accounts.length > 0 ? (
-        <WobblyCard decoration="tack" className="p-8 text-center bg-[var(--surface)]">
-          <Search className="w-10 h-10 text-[var(--ink)]/35 mx-auto mb-2" />
-          <p className="font-heading font-bold text-lg">No accounts match “{searchQuery}”.</p>
-          <button
-            onClick={() => setSearchQuery('')}
-            className="mt-2 text-sm font-heading font-bold text-[var(--pen-blue)] hover:underline cursor-pointer"
-          >
-            Clear search
-          </button>
-        </WobblyCard>
-      ) : (
-        <div className="space-y-8">
-          {visibleProviders.map((provider) => {
-            const poolAccounts = filteredAccounts.filter((acc) => acc.providerId === provider.id);
-            const healthy = poolAccounts.filter((acc) => acc.status === 'healthy').length;
-            const cooldown = poolAccounts.filter((acc) => acc.status === 'cooldown').length;
-            const exhausted = poolAccounts.filter((acc) => acc.status === 'exhausted').length;
+          {providers.map((p) => {
+            const count = accounts.filter((a) => a.providerId === p.id).length;
             return (
-              <section key={provider.id} className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-dashed border-[var(--ink)]/25 pb-2">
-                  <div>
-                    <h3 className="text-xl font-heading font-bold text-[var(--ink)]">{provider.name} Pool</h3>
-                    <p className="text-xs font-mono text-[var(--ink)]/65">
-                      {poolAccounts.length} credential(s) · {healthy} healthy · {cooldown} cooldown · {exhausted} exhausted
-                    </p>
-                  </div>
-                  {provider.credentialMode === 'manual' ? (
-                    <SketchButton variant="secondary" size="sm" onClick={() => openAddForProvider(provider.id)} className="gap-1">
-                      <Plus className="w-4 h-4" />
-                      {provider.credentialEnrollment.actionLabel || 'Add API Key'}
-                    </SketchButton>
-                  ) : provider.credentialMode === 'auth_flow' ? (
-                    <SketchButton
-                      variant="secondary"
-                      size="sm"
-                      disabled={!provider.credentialEnrollment.available || authEnrollment.busy}
-                      onClick={() => {
-                        setEnrollmentError(null);
-                        setEnrollmentNotice(null);
-                        void authEnrollment.begin(
-                          provider.id,
-                          () => Kinetix.startProviderCredentialEnrollment(provider.id),
-                        );
-                      }}
-                      className="gap-1"
-                    >
-                      <KeyRound className="w-4 h-4" />
-                      {provider.credentialEnrollment.actionLabel || 'Connect account'}
-                    </SketchButton>
-                  ) : (
-                    <SketchBadge variant="green">No credential required</SketchBadge>
-                  )}
-                </div>
-
-                {poolAccounts.length === 0 ? (
-                  <div className="p-5 text-sm font-body text-[var(--ink)]/65 bg-[var(--surface)] border-2 border-dashed border-[var(--ink)]/25 rounded">
-                    {provider.credentialMode === 'none'
-                      ? 'No credential required.'
-                      : provider.credentialMode === 'auth_flow'
-                        ? provider.credentialEnrollment.available
-                          ? 'Connect an account to use this provider.'
-                          : 'Authentication plugin is unavailable. Manual API-key entry is disabled.'
-                        : 'No credentials in this provider pool.'}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {poolAccounts.map((acc, idx) => {
-                    const isCooldown = acc.status === 'cooldown';
-                    const isExhausted = acc.status === 'exhausted';
-                    const rotation = idx % 2 === 0 ? '-0.5deg' : '0.5deg';
-
-                    return (
-              <WobblyCard
-                key={acc.id}
-                decoration={isCooldown ? 'tack' : idx % 2 === 0 ? 'tape' : 'none'}
-                rotation={rotation}
-                className={`p-5 flex flex-col justify-between ${
-                  isCooldown ? 'bg-[var(--tint-red)]' : isExhausted ? 'bg-[var(--tint-yellow)]' : 'bg-[var(--surface)]'
+              <button
+                key={p.id}
+                onClick={() => setProviderFilter(p.id)}
+                className={`px-2.5 py-1 rounded-[3px] transition-colors cursor-pointer ${
+                  providerFilter === p.id
+                    ? 'bg-[var(--surface-raised)] text-[var(--text-primary)] font-semibold border border-[var(--border-strong)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <span className="text-xs font-mono bg-[var(--erased)] px-2 py-0.5 rounded border border-[var(--ink)]/30 inline-block mb-1">
-                        {acc.providerName}
-                      </span>
-                      <h3 className="text-xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
-                        <KeyRound className="w-5 h-5 text-[var(--pen-blue)]" />
-                        {acc.label}
-                      </h3>
-                    </div>
-
-                    {acc.status === 'healthy' ? (
-                      <SketchBadge variant="green" rotation="1deg">
-                        Healthy
-                      </SketchBadge>
-                    ) : acc.status === 'cooldown' ? (
-                      <SketchBadge variant="red" rotation="-1deg">
-                        In Cooldown (429)
-                      </SketchBadge>
-                    ) : (
-                      <SketchBadge variant="yellow" rotation="1deg">
-                        Quota Exhausted
-                      </SketchBadge>
-                    )}
-                  </div>
-
-                  {/* Key masked preview */}
-                  <div className="flex items-center justify-between bg-[var(--paper)] p-2 border-2 border-dashed border-[var(--ink)] text-xs font-mono mb-4">
-                    <span>Masked Secret: <strong>{acc.keyMasked}</strong></span>
-                    <span className="text-[var(--pen-green)] font-bold">🔒 Encrypted at rest</span>
-                  </div>
-
-                  {/* Cooldown / Quota warning notice */}
-                  {isCooldown && (
-                    <div className="p-3 bg-[var(--tint-red)] border-2 border-[var(--marker-red)] sketch-shadow-sm mb-4 rounded text-xs font-mono text-[var(--danger-text)]">
-                      <div className="flex items-center gap-1.5 font-bold mb-1">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>{acc.lastError || 'Rate Limit (HTTP 429)'}</span>
-                      </div>
-                      <div>Cooling down: {acc.cooldownUntil || 'until Retry-After passes'}</div>
-                      <button
-                        onClick={() => void probeAccount(acc, true)}
-                        disabled={testingAccountId === acc.id}
-                        className="mt-2 px-2 py-1 bg-[var(--surface)] border border-[var(--ink)] text-[var(--ink)] hover:bg-[var(--erased)] rounded flex items-center gap-1 cursor-pointer font-bold disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${testingAccountId === acc.id ? 'animate-spin' : ''}`} />
-                        {testingAccountId === acc.id ? 'Testing…' : 'Test & Clear Cooldown'}
-                      </button>
-                    </div>
-                  )}
-
-                  {testResults[acc.id] && (
-                    <div
-                      className={`mb-4 p-3 border-2 rounded text-xs font-mono ${
-                        testResults[acc.id].ok
-                          ? 'bg-[var(--tint-green)] border-[var(--pen-green)]'
-                          : 'bg-[var(--tint-red)] border-[var(--marker-red)]'
-                      }`}
-                    >
-                      <div className="font-bold">
-                        {testResults[acc.id].ok ? 'Proxy test passed' : 'Proxy test failed'}
-                        {testResults[acc.id].status ? ` · HTTP ${testResults[acc.id].status}` : ''}
-                        {testResults[acc.id].latency_ms != null ? ` · ${testResults[acc.id].latency_ms}ms` : ''}
-                      </div>
-                      {testResults[acc.id].error && <div className="mt-1 break-words">{testResults[acc.id].error}</div>}
-                      {testResults[acc.id].response_preview && (
-                        <div className="mt-1 text-[var(--ink)]/70 break-words">{testResults[acc.id].response_preview}</div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Soft Quotas & Statistics */}
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono bg-[var(--surface)] p-3 border border-[var(--ink)] rounded mb-4">
-                    <div>
-                      Requests Served: <strong>{acc.requestsCount.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      Tokens Processed: <strong>{formatTokens(acc.tokensCount)}</strong>
-                    </div>
-                    <div>
-                      Spend Accrued: <strong>{formatCurrency(acc.currentSpend)}</strong>
-                    </div>
-                    <div>
-                      Soft Quota Cap:{' '}
-                      <strong>
-                        {acc.softQuotaSpendLimit ? formatCurrency(acc.softQuotaSpendLimit) : 'Unlimited'}
-                      </strong>
-                    </div>
-                    {acc.quotaResetTime && (
-                      <div className="col-span-2 text-[var(--pen-blue)] pt-1 border-t border-[var(--ink)]/20">
-                        Quota Reset: <strong>{acc.quotaResetTime}</strong>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--ink)]/20 pt-3 text-xs font-mono">
-                  <div className="text-[var(--ink)]/70">
-                    <span>Provider Priority: <strong>Tier #{acc.priority}</strong></span>
-                  </div>
-
-                  <div className="flex items-center gap-2 ml-auto">
-                    <button
-                      onClick={() => openConfigure(acc)}
-                      className="px-2 py-1 text-xs font-heading font-bold text-[var(--pen-blue)] hover:bg-[var(--tint-blue)] border border-[var(--pen-blue)]/40 hover:border-[var(--pen-blue)] rounded flex items-center gap-1 cursor-pointer transition-colors"
-                      title="Configure this account"
-                    >
-                      <Sliders className="w-3.5 h-3.5" />
-                      <span>Configure</span>
-                    </button>
-                    <button
-                      onClick={() => void probeAccount(acc)}
-                      disabled={testingAccountId === acc.id}
-                      className="px-2 py-1 text-xs font-heading font-bold text-[var(--pen-blue)] hover:bg-[var(--tint-blue)] border border-[var(--pen-blue)]/40 hover:border-[var(--pen-blue)] rounded flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
-                      title="Send a minimal real proxy request through this account"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${testingAccountId === acc.id ? 'animate-spin' : ''}`} />
-                      <span>{testingAccountId === acc.id ? 'Testing…' : 'Test Proxy'}</span>
-                    </button>
-
-                  {confirmDeleteAccountId === acc.id ? (
-                    <div className="flex items-center gap-1 bg-[var(--tint-red)] px-2 py-1 border border-[var(--marker-red)] rounded text-xs font-heading">
-                      <span className="text-[var(--danger-text)] font-bold">Remove pool key?</span>
-                      <button
-                        onClick={() => {
-                          onDeleteAccount(acc.id);
-                          setConfirmDeleteAccountId(null);
-                        }}
-                        className="px-2 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:brightness-90 cursor-pointer"
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteAccountId(null)}
-                        className="px-2 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded hover:bg-[var(--erased)] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmDeleteAccountId(acc.id)}
-                      className="px-2 py-1 text-xs font-heading font-bold text-[var(--marker-red)] hover:bg-[var(--tint-red)] border border-[var(--marker-red)]/40 hover:border-[var(--marker-red)] rounded flex items-center gap-1 cursor-pointer transition-colors"
-                      title="Remove this credential account from pool"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remove Pool Key</span>
-                    </button>
-                  )}
-                  </div>
-                </div>
-              </WobblyCard>
-                    );
-                  })}
-                  </div>
-                )}
-              </section>
+                {p.name} ({count})
+              </button>
             );
           })}
-
-          {providerFilter === 'all' && orphanAccounts.length > 0 && (
-            <section className="space-y-3">
-              <h3 className="text-xl font-heading font-bold text-[var(--ink)]">Unknown Provider Pool</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {orphanAccounts.map((acc) => (
-                  <WobblyCard key={acc.id} className="p-5 bg-[var(--surface)]">
-                    <h4 className="font-heading font-bold">{acc.label}</h4>
-                    <p className="text-xs font-mono">{acc.providerId} · Tier #{acc.priority} · {acc.status}</p>
-                  </WobblyCard>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       )}
 
-      {editingAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="w-full max-w-lg">
-            <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
-              <button
-                onClick={() => setEditingAccount(null)}
-                className="absolute top-4 right-4 text-[var(--ink)] font-bold text-xl hover:text-[var(--marker-red)] cursor-pointer"
-              >
-                ✕
-              </button>
-              <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
-                <Sliders className="w-6 h-6 text-[var(--pen-blue)]" />
-                Configure Account
-              </h3>
-              <form onSubmit={handleConfigureSubmit} className="space-y-4 font-body">
-                <div>
-                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
-                    Account Label
-                  </label>
-                  <input
-                    autoFocus
-                    type="text"
-                    required
-                    value={editLabel}
-                    onChange={(e) => setEditLabel(e.target.value)}
-                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
-                    style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
-                  />
-                  {!editLabel.trim() && (
-                    <p className="text-xs text-[var(--danger-text)] mt-1">Label cannot be blank.</p>
-                  )}
-                </div>
+      {/* Provider Account Pools */}
+      <div className="space-y-6">
+        {visibleProviders.map((provider) => {
+          const poolAccounts = filteredAccounts.filter((acc) => acc.providerId === provider.id);
+          const healthy = poolAccounts.filter((acc) => acc.status === 'healthy').length;
+          const cooldown = poolAccounts.filter((acc) => acc.status === 'cooldown').length;
+          const exhausted = poolAccounts.filter((acc) => acc.status === 'exhausted').length;
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">Priority Tier</label>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={editPriority}
-                      onChange={(e) => setEditPriority(Number(e.target.value))}
-                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">Weight</label>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={editWeight}
-                      onChange={(e) => setEditWeight(Number(e.target.value))}
-                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">Soft Quota (USD)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder="Unlimited"
-                      value={editQuota}
-                      onChange={(e) => setEditQuota(e.target.value)}
-                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">Quota Reset</label>
-                    <select
-                      value={editQuotaType}
-                      onChange={(e) => setEditQuotaType(e.target.value as Account['quotaType'])}
-                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2"
-                    >
-                      <option value="none">None</option>
-                      <option value="daily">Daily</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="rolling">Rolling</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <SketchButton type="button" variant="ghost" onClick={() => setEditingAccount(null)}>
-                    Cancel
-                  </SketchButton>
-                  <SketchButton
-                    type="submit"
-                    variant="primary"
-                    disabled={!editLabel.trim() || editPriority < 1 || editWeight < 1 || (editQuota.trim() !== '' && Number(editQuota) < 0)}
+          return (
+            <Card
+              key={provider.id}
+              title={`${provider.name} Pool`}
+              subtitle={`${poolAccounts.length} credentials • ${healthy} healthy • ${cooldown} in cooldown • ${exhausted} exhausted`}
+              action={
+                provider.credentialMode === 'manual' ? (
+                  <Button size="xs" variant="secondary" onClick={() => openAddForProvider(provider.id)}>
+                    <Plus className="w-3 h-3" /> Add API Key
+                  </Button>
+                ) : provider.credentialMode === 'auth_flow' ? (
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    onClick={() =>
+                      authEnrollment.begin(
+                        provider.id,
+                        () => Kinetix.startProviderCredentialEnrollment(provider.id),
+                      )
+                    }
                   >
-                    Save Changes
-                  </SketchButton>
+                    <KeyRound className="w-3 h-3" /> Connect Account
+                  </Button>
+                ) : null
+              }
+            >
+              {poolAccounts.length === 0 ? (
+                <div className="p-6 text-center border border-dashed border-[var(--border)] rounded text-xs text-[var(--text-muted)] font-mono">
+                  {provider.credentialMode === 'none'
+                    ? 'No credential required for this local/self-hosted provider.'
+                    : 'No credentials enrolled in this provider pool yet.'}
                 </div>
-              </form>
-            </WobblyCard>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {poolAccounts.map((acc) => {
+                    const isCooldown = acc.status === 'cooldown';
+                    const isExhausted = acc.status === 'exhausted';
+                    const quotaLimit = acc.softQuotaSpendLimit || 0;
+                    const spend = acc.currentSpend || 0;
+                    const percent = quotaLimit > 0 ? Math.min(100, Math.round((spend / quotaLimit) * 100)) : 0;
+
+                    return (
+                      <div
+                        key={acc.id}
+                        className={`p-4 rounded-[6px] border ${
+                          isCooldown
+                            ? 'border-[var(--danger-border)] bg-[var(--danger-bg)]'
+                            : isExhausted
+                            ? 'border-[var(--warning-border)] bg-[var(--warning-bg)]'
+                            : 'border-[var(--border)] bg-[var(--surface-raised)]'
+                        } flex flex-col justify-between space-y-3 font-mono text-xs`}
+                      >
+                        {/* Header */}
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                              <div className="font-semibold text-sm text-[var(--text-primary)] font-mono">
+                                {acc.label}
+                              </div>
+                              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
+                                {acc.providerName}
+                              </span>
+                            </div>
+
+                            <StatusBadge
+                              variant={
+                                acc.status === 'healthy'
+                                  ? 'healthy'
+                                  : acc.status === 'cooldown'
+                                  ? 'danger'
+                                  : 'warning'
+                              }
+                              size="sm"
+                            >
+                              {acc.status.toUpperCase()}
+                            </StatusBadge>
+                          </div>
+
+                          {/* Masked Secret Key Box */}
+                          <div className="p-2 rounded bg-[var(--surface)] border border-[var(--border)] flex items-center justify-between text-[11px] mb-3">
+                            <span className="text-[var(--text-secondary)] font-semibold">
+                              {acc.keyMasked}
+                            </span>
+                            <span className="text-[var(--healthy)] text-[10px] flex items-center gap-1">
+                              <Lock className="w-3 h-3" /> Encrypted
+                            </span>
+                          </div>
+
+                          {/* Cooldown Alert Notice */}
+                          {isCooldown && (
+                            <div className="p-2.5 rounded bg-[var(--surface)] border border-[var(--danger-border)] text-xs text-[var(--danger)] mb-3 space-y-1">
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>{acc.lastError || 'Rate Limit (HTTP 429)'}</span>
+                              </div>
+                              <div className="text-[11px] text-[var(--text-muted)]">
+                                Cooling down: {acc.cooldownUntil || 'until Retry-After passes'}
+                              </div>
+                              <Button
+                                size="xs"
+                                variant="secondary"
+                                onClick={() => void probeAccount(acc, true)}
+                                isLoading={testingAccountId === acc.id}
+                              >
+                                Test &amp; Clear Cooldown
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Test Results Output */}
+                          {testResults[acc.id] && (
+                            <div
+                              className={`p-2 rounded border text-[11px] mb-3 ${
+                                testResults[acc.id].ok
+                                  ? 'border-[var(--healthy-border)] bg-[var(--healthy-bg)] text-[var(--healthy)]'
+                                  : 'border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger)]'
+                              }`}
+                            >
+                              {testResults[acc.id].ok ? '✓ Upstream probe successful' : '✗ Probe failed'}
+                              {testResults[acc.id].latency_ms != null && ` (${testResults[acc.id].latency_ms}ms)`}
+                            </div>
+                          )}
+
+                          {/* Quota Progress Meter */}
+                          {quotaLimit > 0 && (
+                            <div className="space-y-1 mb-3">
+                              <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                                <span>Spend vs Soft Cap</span>
+                                <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                                  {formatCurrency(spend)} / {formatCurrency(quotaLimit)} ({percent}%)
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    percent > 90
+                                      ? 'bg-[var(--danger)]'
+                                      : percent > 75
+                                      ? 'bg-[var(--warning)]'
+                                      : 'bg-[var(--healthy)]'
+                                  }`}
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Account Stats */}
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--text-muted)] border-t border-[var(--border-subtle)] pt-2">
+                            <div>Requests: <b className="text-[var(--text-secondary)]">{acc.requestsCount.toLocaleString()}</b></div>
+                            <div>Tokens: <b className="text-[var(--text-secondary)]">{formatTokens(acc.tokensCount)}</b></div>
+                            <div>Priority: <b className="text-[var(--primary)]">P{acc.priority}</b></div>
+                            <div>Weight: <b className="text-[var(--text-secondary)]">{acc.weight}</b></div>
+                          </div>
+                        </div>
+
+                        {/* Card Actions */}
+                        <div className="flex items-center justify-between border-t border-[var(--border)] pt-2.5">
+                          <Button
+                            size="xs"
+                            variant="secondary"
+                            onClick={() => void probeAccount(acc)}
+                            isLoading={testingAccountId === acc.id}
+                          >
+                            <Play className="w-3 h-3 text-[var(--healthy)]" />
+                            Probe
+                          </Button>
+
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingAccount(acc);
+                                setEditLabel(acc.label);
+                                setEditPriority(acc.priority);
+                                setEditWeight(acc.weight);
+                                setEditQuota(acc.softQuotaSpendLimit ? String(acc.softQuotaSpendLimit) : '');
+                                setEditQuotaType(acc.quotaType || 'none');
+                              }}
+                            >
+                              <Sliders className="w-3 h-3" />
+                              Configure
+                            </Button>
+
+                            {confirmDeleteAccountId === acc.id ? (
+                              <div className="flex items-center gap-1 bg-[var(--danger-bg)] px-2 py-0.5 rounded border border-[var(--danger-border)]">
+                                <span className="text-[var(--danger)] font-bold text-[10px]">Delete?</span>
+                                <button
+                                  onClick={() => {
+                                    onDeleteAccount(acc.id);
+                                    setConfirmDeleteAccountId(null);
+                                  }}
+                                  className="text-[var(--danger)] font-bold hover:underline"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteAccountId(null)}
+                                  className="text-[var(--text-muted)] hover:underline"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteAccountId(acc.id)}
+                                className="p-1 text-[var(--text-muted)] hover:text-[var(--danger)] cursor-pointer"
+                                title="Delete account"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Add API Key Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] max-w-md w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                Enroll API Key in Account Pool
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">Account Label</label>
+                <Input
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="e.g. Anthropic Primary Prod Key"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">Upstream Provider</label>
+                <Select
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  className="w-full"
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">API Secret Key</label>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  required
+                  mono
+                />
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">Soft Quota Spend Limit (USD/mo)</label>
+                <Input
+                  type="number"
+                  value={softQuota}
+                  onChange={(e) => setSoftQuota(Number(e.target.value))}
+                  placeholder="100"
+                />
+              </div>
+
+              {accountValidation && (
+                <div
+                  className={`p-2.5 rounded border text-xs font-mono ${
+                    accountValidation.valid
+                      ? 'bg-[var(--healthy-bg)] border-[var(--healthy-border)] text-[var(--healthy)]'
+                      : 'bg-[var(--danger-bg)] border-[var(--danger-border)] text-[var(--danger)]'
+                  }`}
+                >
+                  <div className="font-bold">
+                    {accountValidation.valid ? '✓ Dry-run validation passed' : '✗ Validation problems found'}
+                  </div>
+                  {accountValidation.problems.map((p, i) => (
+                    <div key={i}>• {p}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                <Button size="sm" variant="ghost" type="button" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  type="button"
+                  onClick={handleValidateAccount}
+                  isLoading={validatingAccount}
+                >
+                  Validate
+                </Button>
+                <Button size="sm" variant="primary" type="submit">
+                  Save to Pool
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Add Account Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="w-full max-w-lg">
-            <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="absolute top-4 right-4 text-[var(--ink)] font-bold text-xl hover:text-[var(--marker-red)] cursor-pointer"
-              >
-                ✕
-              </button>
-
-              <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
-                <KeyRound className="w-6 h-6 text-[var(--pen-blue)]" />
-                Add Upstream Provider Credential
+      {/* Edit Account Modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] max-w-md w-full p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                Configure {editingAccount.label}
               </h3>
+              <button onClick={() => setEditingAccount(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              <form onSubmit={handleCreateSubmit} className="space-y-4 font-body">
-                <div>
-                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
-                    Provider
-                  </label>
-                  <select
-                    value={providerId}
-                    onChange={(e) => setProviderId(e.target.value)}
-                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none"
-                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
-                  >
-                    {providers.filter((p) => p.credentialMode === 'manual').map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.wireFormat})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <form onSubmit={handleEditSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">Label</label>
+                <Input
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  required
+                />
+              </div>
 
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
-                    Account Label / Identification
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Gemini Team Pay-as-you-go #2"
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
-                    style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
-                    Raw API Key (Encrypted immediately on storage)
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="AIzaSy... or sk-..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-mono sketch-shadow-sm focus:outline-none"
-                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
-                  />
-                  <p className="text-xs text-[var(--ink)]/60 mt-1">
-                    Upstream keys never leave the server or appear in client responses.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
-                    Soft Quota Spend Limit (USD/month)
-                  </label>
-                  <input
+                  <label className="block text-[var(--text-muted)] font-mono mb-1">Priority Tier</label>
+                  <Input
                     type="number"
-                    value={softQuota}
-                    onChange={(e) => setSoftQuota(Number(e.target.value))}
-                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
-                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyBtn }}
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(parseInt(e.target.value, 10) || 1)}
+                    min={1}
                   />
                 </div>
-
-                <div className="pt-2 flex justify-end gap-3">
-                  <SketchButton
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setShowAddModal(false)}
-                  >
-                    Cancel
-                  </SketchButton>
-                  <SketchButton
-                    type="button"
-                    variant="secondary"
-                    onClick={handleValidateAccount}
-                    disabled={validatingAccount || !label.trim() || !apiKey.trim()}
-                  >
-                    {validatingAccount ? 'Validating…' : 'Validate (Dry Run)'}
-                  </SketchButton>
-                  <SketchButton type="submit" variant="danger" className="font-bold">
-                    Save Key to Pool
-                  </SketchButton>
+                <div>
+                  <label className="block text-[var(--text-muted)] font-mono mb-1">Load Weight</label>
+                  <Input
+                    type="number"
+                    value={editWeight}
+                    onChange={(e) => setEditWeight(parseInt(e.target.value, 10) || 1)}
+                    min={1}
+                  />
                 </div>
-                {accountValidation && (
-                  <div
-                    className="mt-3 p-3 text-sm font-mono"
-                    style={{
-                      borderRadius: DESIGN_TOKENS.radii.wobbly,
-                      background: accountValidation.valid ? 'var(--tint-green)' : 'var(--tint-red)',
-                      border: `2px solid ${accountValidation.valid ? 'var(--pen-green)' : 'var(--marker-red)'}`,
-                    }}
-                  >
-                    <div className="font-bold mb-1">
-                      {accountValidation.valid ? 'Validate: passed' : 'Validate: problems found'}
-                    </div>
-                    {accountValidation.problems.map((p, i) => (
-                      <div key={i} style={{ color: 'var(--danger-text)' }}>• {p}</div>
-                    ))}
-                  </div>
-                )}
-              </form>
-            </WobblyCard>
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] font-mono mb-1">Soft Quota (USD)</label>
+                <Input
+                  type="number"
+                  value={editQuota}
+                  onChange={(e) => setEditQuota(e.target.value)}
+                  placeholder="e.g. 250"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
+                <Button size="sm" variant="ghost" type="button" onClick={() => setEditingAccount(null)}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant="primary" type="submit">
+                  Save Changes
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

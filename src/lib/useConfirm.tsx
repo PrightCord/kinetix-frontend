@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { SketchButton } from '../components/HandDrawnElements';
-import { DESIGN_TOKENS } from './designSystem';
+import { Button } from '../components/KinetixUI';
 
 interface ConfirmRequest {
   title: string;
@@ -14,15 +13,7 @@ interface ConfirmRequest {
 
 /**
  * Promise-based confirmation for destructive actions. Every irreversible
- * operation (delete, revoke, clear) should gate on this so a stray click can
- * never remove configuration or a credential.
- *
- * Usage:
- *   const { confirm, confirmNode } = useConfirm();
- *   ...
- *   if (!(await confirm({ title, message, confirmLabel: 'Delete' }))) return;
- *   ...
- *   return <>{confirmNode}...</>;
+ * operation (delete, revoke, clear) gates on this modal.
  */
 export function useConfirm() {
   const [req, setReq] = useState<ConfirmRequest | null>(null);
@@ -51,31 +42,42 @@ export function useConfirm() {
   };
 
   const confirmNode = req ? (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-      <div
-        className="w-full max-w-md bg-[var(--paper)] border-2 border-[var(--ink)] p-6 sketch-shadow"
-        style={{ borderRadius: DESIGN_TOKENS.radii.wobblyLg }}
-      >
-        <h3 className="text-xl font-heading font-bold text-[var(--ink)] mb-2 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-[var(--marker-red)]" />
-          {req.title}
-        </h3>
-        <p className="text-base font-body text-[var(--ink)]/90">{req.message}</p>
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] p-5 shadow-2xl space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-[4px] bg-[var(--danger-bg)] border border-[var(--danger-border)] flex items-center justify-center text-[var(--danger)] shrink-0">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            {req.title}
+          </h3>
+        </div>
+
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+          {req.message}
+        </p>
+
         {req.detail && (
-          <p
-            className="mt-2 p-2 text-sm font-mono bg-[var(--postit)] border border-[var(--marker-orange)] text-[var(--warn-text)]"
-            style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
-          >
+          <p className="p-2.5 rounded-[4px] text-xs font-mono bg-[var(--surface-raised)] border border-[var(--warning-border)] text-[var(--warning)] break-all">
             {req.detail}
           </p>
         )}
-        <div className="mt-5 flex justify-end gap-3">
-          <SketchButton variant="ghost" onClick={() => close(false)}>
+
+        <div className="pt-2 flex justify-end gap-2 border-t border-[var(--border)]">
+          <Button variant="secondary" size="sm" onClick={() => close(false)}>
             Cancel
-          </SketchButton>
-          <SketchButton variant={req.danger ? 'danger' : 'primary'} onClick={() => close(true)}>
+          </Button>
+          <Button
+            variant={req.danger ? 'danger' : 'primary'}
+            size="sm"
+            onClick={() => close(true)}
+          >
             {req.confirmLabel}
-          </SketchButton>
+          </Button>
         </div>
       </div>
     </div>

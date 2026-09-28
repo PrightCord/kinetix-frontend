@@ -18,10 +18,10 @@ import { AccountsView } from './components/views/AccountsView';
 import { UsageView } from './components/views/UsageView';
 import { RequestsView } from './components/views/RequestsView';
 import { HealthView } from './components/views/HealthView';
+import { OverviewView } from './components/views/OverviewView';
 import { LiveRequest } from './types';
 import { AliasesView } from './components/views/AliasesView';
 import { AuditView } from './components/views/AuditView';
-import { SquiggleDivider } from './components/HandDrawnElements';
 import { EMPTY_METRICS } from './lib/mappers';
 import { Kinetix, ExportFile, UsageDay } from './lib/resources';
 import { SettingsView } from './components/views/SettingsView';
@@ -51,14 +51,14 @@ function getTabFromPath(path: string): NavTab {
       return tab;
     }
   }
-  return 'keys';
+  return 'overview';
 }
 
 export default function App() {
   const [auth, setAuth] = useState<AuthState>('checking');
   const [currentUser, setCurrentUser] = useState('admin');
   const [activeTab, setActiveTab] = useState<NavTab>(() =>
-    typeof window !== 'undefined' ? getTabFromPath(window.location.pathname) : 'keys',
+    typeof window !== 'undefined' ? getTabFromPath(window.location.pathname) : 'overview',
   );
   const [isTesterOpen, setIsTesterOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -504,6 +504,20 @@ export default function App() {
           </div>
         )}
 
+        {activeTab === 'overview' && (
+          <OverviewView
+            metrics={metrics}
+            routes={routes}
+            providers={providers}
+            accounts={accounts}
+            keys={keys}
+            requests={requests}
+            liveRequests={liveRequests}
+            onOpenTester={() => setIsTesterOpen(true)}
+            onNavigateTab={handleSelectTab}
+          />
+        )}
+
         {activeTab === 'keys' && (
           <KeysView
             keys={keys}
@@ -590,21 +604,15 @@ export default function App() {
         {activeTab === 'settings' && <SettingsView onLogout={handleLogout} />}
         </main>
 
-        <div className="w-full px-4 md:px-8">
-          <SquiggleDivider />
-        </div>
-
-        <footer className="w-full py-6 px-4 text-center font-body text-sm text-[var(--ink)]/70">
-          <p className="flex items-center justify-center gap-2 flex-wrap">
-            <strong className="font-heading text-base text-[var(--ink)]">Kinetix</strong>
+        <footer className="w-full py-4 px-6 border-t border-[var(--border)] text-xs text-[var(--text-muted)] flex flex-wrap items-center justify-between gap-3 font-mono">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[var(--text-secondary)]">KINETIX CONTROL PLANE</span>
             <span>•</span>
-            <span>Zero-downtime LLM Multi-Protocol Proxy</span>
-            <span>•</span>
-            <span className="underline decoration-wavy decoration-[var(--marker-red)]">Hand-Drawn Design System</span>
-          </p>
-          <p className="text-xs text-[var(--ink)]/50 font-mono mt-1">
-            OpenAI &amp; Anthropic streaming in • Gemini, OpenAI, &amp; Anthropic upstream out • SQLite WAL at rest
-          </p>
+            <span>Zero-Downtime Multi-Protocol Routing</span>
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)]">
+            OpenAI &amp; Anthropic Ingress • Universal Upstream Adaptation • SQLite WAL at rest
+          </div>
         </footer>
       </div>
 

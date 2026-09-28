@@ -30,7 +30,7 @@ function readStored(): ThemeMode {
   } catch {
     /* ignore */
   }
-  return 'system';
+  return 'dark';
 }
 
 /**

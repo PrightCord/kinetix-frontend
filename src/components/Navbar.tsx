@@ -1,8 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  ShieldCheck,
   Activity,
-  DollarSign,
   Play,
   Key,
   Shuffle,
@@ -21,15 +19,31 @@ import {
   Moon,
   Monitor,
   Puzzle,
+  LayoutDashboard,
+  ShieldCheck,
+  ChevronDown,
 } from 'lucide-react';
 import { ProxyMetrics } from '../types';
 import { formatCurrency } from '../lib/designSystem';
-import { SketchButton, SketchBadge } from './HandDrawnElements';
+import { Button, StatusBadge } from './KinetixUI';
 import type { ThemeMode } from '../lib/theme';
 
-export type NavTab = 'keys' | 'routes' | 'providers' | 'accounts' | 'plugins' | 'usage' | 'requests' | 'health' | 'aliases' | 'audit' | 'settings';
+export type NavTab =
+  | 'overview'
+  | 'keys'
+  | 'routes'
+  | 'providers'
+  | 'accounts'
+  | 'plugins'
+  | 'usage'
+  | 'requests'
+  | 'health'
+  | 'aliases'
+  | 'audit'
+  | 'settings';
 
 export const TAB_ROUTES: Record<NavTab, string> = {
+  overview: '/admin/overview',
   keys: '/admin/keys',
   routes: '/admin/routes',
   providers: '/admin/providers',
@@ -50,41 +64,33 @@ interface NavItem {
   badge?: string;
 }
 
-/**
- * The navigation is grouped by intent — what a new operator does first (hand out
- * a key, route it), then how the gateway is wired (upstreams, accounts, names),
- * then how to observe it — so the sidebar reads top-to-bottom as a workflow
- * rather than an undifferentiated row of tabs.
- */
 export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
-    label: 'Gateway',
+    label: 'Operations',
     items: [
-      { id: 'keys', label: 'Virtual Keys', icon: <Key className="w-5 h-5" /> },
-      { id: 'routes', label: 'Routes & Fallback', icon: <Shuffle className="w-5 h-5" />, badge: 'Active' },
+      { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+      { id: 'routes', label: 'Routes & Topology', icon: <Shuffle className="w-4 h-4" />, badge: 'Active' },
+      { id: 'requests', label: 'Request Inspector', icon: <Radio className="w-4 h-4" />, badge: 'Live' },
     ],
   },
   {
-    label: 'Configuration',
+    label: 'Access & Providers',
     items: [
-      { id: 'providers', label: 'Upstream Providers', icon: <Server className="w-5 h-5" /> },
-      { id: 'accounts', label: 'Accounts & Pools', icon: <Users className="w-5 h-5" /> },
-      { id: 'plugins', label: 'Plugins & Integrations', icon: <Puzzle className="w-5 h-5" /> },
-      { id: 'aliases', label: 'Model Aliases', icon: <Compass className="w-5 h-5" /> },
+      { id: 'keys', label: 'Virtual Keys', icon: <Key className="w-4 h-4" /> },
+      { id: 'providers', label: 'Upstream Providers', icon: <Server className="w-4 h-4" /> },
+      { id: 'accounts', label: 'Accounts & Pools', icon: <Users className="w-4 h-4" /> },
+      { id: 'aliases', label: 'Model Aliases', icon: <Compass className="w-4 h-4" /> },
+      { id: 'plugins', label: 'Plugins & Credentials', icon: <Puzzle className="w-4 h-4" /> },
     ],
   },
   {
-    label: 'Observability',
+    label: 'Observability & System',
     items: [
-      { id: 'usage', label: 'Usage & Spend', icon: <BarChart3 className="w-5 h-5" /> },
-      { id: 'requests', label: 'Request Inspector', icon: <Radio className="w-5 h-5" />, badge: 'Live' },
-      { id: 'health', label: 'Runtime Health', icon: <Activity className="w-5 h-5" /> },
-      { id: 'audit', label: 'Audit Log', icon: <History className="w-5 h-5" /> },
+      { id: 'health', label: 'Runtime Health', icon: <Activity className="w-4 h-4" /> },
+      { id: 'usage', label: 'Usage & Cost', icon: <BarChart3 className="w-4 h-4" /> },
+      { id: 'audit', label: 'Audit Log', icon: <History className="w-4 h-4" /> },
+      { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
     ],
-  },
-  {
-    label: 'System',
-    items: [{ id: 'settings', label: 'Settings & Security', icon: <Settings className="w-5 h-5" /> }],
   },
 ];
 
@@ -96,27 +102,16 @@ export function tabLabel(tab: NavTab): string {
   return 'Kinetix';
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand() {
   return (
-    <div className="flex items-center gap-3">
-      <div
-        className="w-11 h-11 bg-[var(--marker-red)] text-[var(--surface)] flex items-center justify-center font-heading font-bold text-2xl border-2 border-[var(--ink)] sketch-shadow -rotate-2 select-none shrink-0"
-        style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
-      >
+    <div className="flex items-center gap-2.5 px-3 py-4 border-b border-[var(--border)]">
+      {/* Bauhaus Geometric Icon */}
+      <div className="w-7 h-7 rounded-[4px] bg-[#1a1a24] border border-[var(--primary)] flex items-center justify-center font-mono font-bold text-sm text-[var(--primary)] shrink-0 select-none">
         K
       </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-heading font-bold tracking-tight text-[var(--ink)]">Kinetix</h1>
-          <SketchBadge variant="yellow" rotation="1deg" className="text-xs font-heading">
-            v0.1
-          </SketchBadge>
-        </div>
-        {!compact && (
-          <p className="text-xs text-[var(--ink)]/70 font-body leading-tight">
-            Multi-Protocol LLM Proxy
-          </p>
-        )}
+      <div className="min-w-0 flex items-baseline gap-2">
+        <span className="font-semibold text-sm tracking-tight text-[var(--text-primary)]">KINETIX</span>
+        <span className="font-mono text-[10px] text-[var(--text-muted)]">v0.5.2</span>
       </div>
     </div>
   );
@@ -127,7 +122,6 @@ interface SidebarProps {
   onSelectTab: (tab: NavTab) => void;
   currentUser?: string;
   onLogout?: () => void;
-  /** Mobile drawer open state (ignored on lg+ where the rail is always shown). */
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -135,129 +129,119 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onSelectTab,
-  currentUser,
+  currentUser = 'admin',
   onLogout,
   mobileOpen,
   onCloseMobile,
 }) => {
-  const nav = (
-    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-      {NAV_GROUPS.map((group) => (
-        <div key={group.label}>
-          <div className="px-2 mb-1.5 text-[0.7rem] font-heading font-bold uppercase tracking-[0.15em] text-[var(--ink)]/45">
-            {group.label}
-          </div>
-          <div className="space-y-1">
-            {group.items.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <a
-                  key={item.id}
-                  id={`tab-${item.id}`}
-                  href={TAB_ROUTES[item.id]}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onSelectTab(item.id);
-                    onCloseMobile();
-                  }}
-                  className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 border-2 transition-all select-none no-underline cursor-pointer ${
-                    isActive
-                      ? 'bg-[var(--surface)] border-[var(--ink)] sketch-shadow-sm font-bold -translate-y-0.5'
-                      : 'bg-transparent border-transparent hover:bg-[var(--erased)]/60 hover:border-[var(--ink)]/30'
-                  }`}
-                  style={{ borderRadius: '14px 10px 16px 10px / 10px 16px 10px 14px' }}
-                >
-                  {/* active marker bar */}
-                  <span
-                    className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full ${
-                      isActive ? 'bg-[var(--marker-red)]' : 'bg-transparent'
-                    }`}
-                  />
-                  <span className={isActive ? 'text-[var(--marker-red)]' : 'text-[var(--ink)]/60 group-hover:text-[var(--ink)]'}>
-                    {item.icon}
-                  </span>
-                  <span className="flex-1 text-base font-heading text-[var(--ink)]">{item.label}</span>
-                  {item.badge && (
-                    <span
-                      className={`text-[0.65rem] px-1.5 py-0.5 rounded-full border border-[var(--ink)] font-heading ${
-                        item.badge === 'Live' ? 'bg-[var(--marker-red)] text-[var(--surface)] animate-pulse' : 'bg-[var(--postit)] text-[var(--ink)]'
+  const content = (
+    <div className="h-full flex flex-col justify-between bg-[var(--sidebar)] text-[var(--text-primary)] select-none">
+      <div className="overflow-y-auto">
+        <Brand />
+
+        <nav className="p-2 space-y-4 text-xs">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="space-y-1">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] font-mono">
+                {group.label}
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onSelectTab(item.id);
+                        onCloseMobile();
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[4px] font-medium transition-colors cursor-pointer text-left ${
+                        isActive
+                          ? 'bg-[var(--surface-raised)] text-[var(--text-primary)] font-semibold shadow-xs'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]'
                       }`}
                     >
-                      {item.badge}
-                    </span>
-                  )}
-                </a>
-              );
-            })}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={isActive ? 'text-[var(--primary)]' : 'text-[var(--text-muted)]'}>
+                          {item.icon}
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span
+                          className={`font-mono text-[9px] px-1.5 py-0.2 rounded border ${
+                            item.badge === 'Live'
+                              ? 'bg-[var(--danger-bg)] text-[var(--danger)] border-[var(--danger-border)]'
+                              : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)]'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Operator Session Footer */}
+      <div className="p-3 border-t border-[var(--border)] bg-[var(--surface-raised)]/30 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-5 h-5 rounded-full bg-[var(--border-strong)] flex items-center justify-center text-[10px] font-mono text-[var(--text-secondary)] uppercase">
+            {currentUser[0] || 'A'}
+          </div>
+          <div className="min-w-0">
+            <div className="font-mono text-[11px] font-medium text-[var(--text-primary)] truncate">
+              {currentUser}
+            </div>
+            <div className="text-[10px] text-[var(--healthy)] flex items-center gap-1 font-mono">
+              <span className="w-1 h-1 rounded-full bg-[var(--healthy)]" />
+              operator
+            </div>
           </div>
         </div>
-      ))}
-    </nav>
-  );
 
-  const footer = currentUser && (
-    <div className="px-3 pb-4 pt-2 border-t-2 border-dashed border-[var(--ink)]/20">
-      <div className="flex items-center gap-2 mb-2 px-1">
-        <div className="w-2 h-2 rounded-full bg-[var(--pen-green)] shrink-0" />
-        <span className="text-xs font-mono text-[var(--ink)]/80 truncate font-bold" title={`Session: ${currentUser}`}>
-          {currentUser}
-        </span>
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Sign out of dashboard"
+            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
-      {onLogout && (
-        <button
-          id="btn-logout"
-          onClick={onLogout}
-          className="w-full px-3 py-2 bg-[var(--surface)] hover:bg-[var(--tint-red)] text-[var(--ink)] hover:text-[var(--marker-red)] border-2 border-[var(--ink)] cursor-pointer transition-colors flex items-center justify-center gap-2 text-sm font-heading font-bold sketch-shadow-sm"
-          style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
-          title="Sign Out / Lock Gateway"
-        >
-          <LogOut className="w-4 h-4" />
-          Sign Out
-        </button>
-      )}
     </div>
   );
 
   return (
     <>
-      {/* Desktop rail */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 h-screen sticky top-0 bg-[var(--paper)] border-r-2 border-[var(--ink)]">
-        <div className="px-4 pt-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/20">
-          <Brand />
-        </div>
-        {nav}
-        {footer}
+      {/* Desktop Persistent Rail */}
+      <aside className="hidden lg:block w-60 shrink-0 h-screen sticky top-0 border-r border-[var(--border)] z-30">
+        {content}
       </aside>
 
-      {/* Mobile drawer */}
-      <div
-        className={`lg:hidden fixed inset-0 z-50 ${mobileOpen ? '' : 'pointer-events-none'}`}
-        aria-hidden={!mobileOpen}
-      >
-        <div
-          className={`absolute inset-0 bg-black/40 transition-opacity ${mobileOpen ? 'opacity-100' : 'opacity-0'}`}
-          onClick={onCloseMobile}
-        />
-        <aside
-          className={`absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] flex flex-col bg-[var(--paper)] border-r-2 border-[var(--ink)] transition-transform duration-200 ${
-            mobileOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        >
-          <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/20">
-            <Brand compact />
+      {/* Mobile Drawer */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={onCloseMobile}
+          />
+          <div className="relative w-64 max-w-[80vw] h-full shadow-xl z-10 border-r border-[var(--border)]">
             <button
               onClick={onCloseMobile}
-              className="p-1.5 border-2 border-[var(--ink)] bg-[var(--surface)] sketch-shadow-sm cursor-pointer"
-              style={{ borderRadius: '10px 14px 10px 14px / 14px 10px 14px 10px' }}
-              aria-label="Close navigation"
+              className="absolute top-3 right-3 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
+            {content}
           </div>
-          {nav}
-          {footer}
-        </aside>
-      </div>
+        </div>
+      )}
     </>
   );
 };
@@ -267,51 +251,12 @@ interface TopBarProps {
   metrics: ProxyMetrics;
   onOpenTester: () => void;
   onOpenNav: () => void;
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
+  onRefresh: () => void;
+  isRefreshing: boolean;
   themeMode: ThemeMode;
   onThemeChange: (mode: ThemeMode) => void;
 }
 
-const THEME_OPTIONS: { mode: ThemeMode; icon: React.ReactNode; label: string }[] = [
-  { mode: 'light', icon: <Sun className="w-4 h-4" />, label: 'Light' },
-  { mode: 'dark', icon: <Moon className="w-4 h-4" />, label: 'Dark' },
-  { mode: 'system', icon: <Monitor className="w-4 h-4" />, label: 'System' },
-];
-
-const ThemeSwitch: React.FC<{ mode: ThemeMode; onChange: (m: ThemeMode) => void }> = ({
-  mode,
-  onChange,
-}) => (
-  <div
-    className="flex items-center bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm overflow-hidden"
-    style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
-    role="group"
-    aria-label="Color theme"
-  >
-    {THEME_OPTIONS.map((opt) => (
-      <button
-        key={opt.mode}
-        onClick={() => onChange(opt.mode)}
-        title={`${opt.label} theme`}
-        aria-pressed={mode === opt.mode}
-        className={`px-2 py-1.5 cursor-pointer transition-colors ${
-          mode === opt.mode
-            ? 'bg-[var(--ink)] text-[var(--surface)]'
-            : 'text-[var(--ink)] hover:bg-[var(--erased)]'
-        }`}
-      >
-        {opt.icon}
-      </button>
-    ))}
-  </div>
-);
-
-/**
- * A slim, low-noise top bar: it holds only the current page title, at-a-glance
- * health, and the primary action — the navigation and the account control now
- * live in the sidebar, so the header no longer competes for attention.
- */
 export const TopBar: React.FC<TopBarProps> = ({
   activeTab,
   metrics,
@@ -322,90 +267,104 @@ export const TopBar: React.FC<TopBarProps> = ({
   themeMode,
   onThemeChange,
 }) => {
+  const [themeOpen, setThemeOpen] = useState(false);
+
   return (
-    <header className="sticky top-0 z-30 w-full bg-[var(--paper)]/95 backdrop-blur-sm border-b-2 border-[var(--ink)]">
-      <div className="w-full px-4 md:px-8 py-2.5 flex items-center gap-3">
-        {/* Mobile nav trigger */}
+    <header className="h-13 bg-[var(--canvas)] border-b border-[var(--border)] px-4 md:px-6 flex items-center justify-between gap-4 sticky top-0 z-20">
+      {/* Left Title & Mobile Hamburger */}
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onOpenNav}
-          className="lg:hidden p-2 border-2 border-[var(--ink)] bg-[var(--surface)] sketch-shadow-sm cursor-pointer shrink-0"
-          style={{ borderRadius: '12px 16px 12px 16px / 16px 12px 16px 12px' }}
+          className="lg:hidden p-1.5 -ml-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-[4px] border border-[var(--border)]"
           aria-label="Open navigation"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-4 h-4" />
         </button>
 
-        {/* Current page */}
         <div className="min-w-0">
-          <h2 className="text-xl md:text-2xl font-heading font-bold text-[var(--ink)] truncate leading-tight">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] tracking-tight truncate">
             {tabLabel(activeTab)}
           </h2>
         </div>
+      </div>
 
-        <div className="flex-1" />
-
-        {/* At-a-glance status — grouped, quiet, wraps on small screens */}
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <div
-            className="hidden sm:flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
-            style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
-            title="Cloudflare Tunnel status"
-          >
-            <span className="w-2 h-2 rounded-full bg-[var(--pen-green)] animate-pulse border border-[var(--ink)]" />
-            <ShieldCheck className="w-3.5 h-3.5 text-[var(--pen-blue)]" />
-            <span className="font-body text-[var(--ink)]">
-              Tunnel <strong className="font-heading">Online</strong>
-            </span>
+      {/* Right Operational Controls & Telemetry */}
+      <div className="flex items-center gap-3">
+        {/* Quick telemetry indicators (hidden on small mobile) */}
+        <div className="hidden sm:flex items-center gap-3 font-mono text-xs text-[var(--text-secondary)] border-r border-[var(--border)] pr-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--healthy)]" />
+            <span className="text-[var(--text-muted)]">CIRCUITS</span>
+            <span className="font-semibold text-[var(--text-primary)]">ALL CLOSED</span>
           </div>
 
-          <div
-            className="flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
-            style={{ borderRadius: '255px 25px 225px 25px / 25px 225px 25px 255px' }}
-            title="Active upstream streams"
-          >
-            <Activity className="w-3.5 h-3.5 text-[var(--marker-red)]" />
-            <span className="font-body text-[var(--ink)]">
-              <strong className="font-heading text-sm">{metrics.activeStreams}</strong> streams
+          <div className="flex items-center gap-1.5">
+            <span className="text-[var(--text-muted)]">TODAY</span>
+            <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+              {formatCurrency(metrics.totalSpendUsd || 0)}
             </span>
           </div>
+        </div>
 
-          <div
-            className="flex items-center gap-1.5 bg-[var(--postit)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
-            style={{ borderRadius: '20px 300px 20px 280px / 280px 20px 300px 20px' }}
-            title="Total recorded spend"
+        {/* Global Live Tester CTA */}
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onOpenTester}
+          className="h-7.5 px-3 font-mono text-xs"
+        >
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span>Live Tester</span>
+        </Button>
+
+        {/* Refresh Action */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          className="h-7.5 px-2.5 text-xs"
+          title="Refresh gateway state"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <span className="hidden md:inline">Sync</span>
+        </Button>
+
+        {/* Minimal Theme Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => setThemeOpen(!themeOpen)}
+            className="p-1.5 rounded-[4px] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-raised)] cursor-pointer"
+            title={`Theme: ${themeMode}`}
           >
-            <DollarSign className="w-3.5 h-3.5 text-[var(--pen-blue)]" />
-            <span className="font-body text-[var(--ink)]">
-              <strong className="font-heading text-sm">{formatCurrency(metrics.totalSpendUsd)}</strong>
-            </span>
-          </div>
+            {themeMode === 'light' ? (
+              <Sun className="w-3.5 h-3.5" />
+            ) : themeMode === 'dark' ? (
+              <Moon className="w-3.5 h-3.5" />
+            ) : (
+              <Monitor className="w-3.5 h-3.5" />
+            )}
+          </button>
 
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-sm font-heading font-bold cursor-pointer hover:bg-[var(--erased)] disabled:opacity-60"
-              style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
-              title="Reload all data from the admin API"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden md:inline">Refresh</span>
-            </button>
+          {themeOpen && (
+            <div className="absolute right-0 mt-1 w-32 rounded-[4px] bg-[var(--surface-raised)] border border-[var(--border)] shadow-md py-1 text-xs z-30 font-medium">
+              {(['dark', 'light', 'system'] as ThemeMode[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => {
+                    onThemeChange(t);
+                    setThemeOpen(false);
+                  }}
+                  className={`w-full px-3 py-1.5 text-left capitalize hover:bg-[var(--surface)] flex items-center justify-between cursor-pointer ${
+                    themeMode === t ? 'text-[var(--primary)] font-semibold' : 'text-[var(--text-secondary)]'
+                  }`}
+                >
+                  <span>{t}</span>
+                  {themeMode === t && <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]" />}
+                </button>
+              ))}
+            </div>
           )}
-
-          <ThemeSwitch mode={themeMode} onChange={onThemeChange} />
-
-          <SketchButton
-            id="btn-test-proxy"
-            variant="danger"
-            size="sm"
-            onClick={onOpenTester}
-            className="gap-1.5 font-heading font-bold"
-          >
-            <Play className="w-4 h-4 fill-[var(--surface)]" />
-            <span className="hidden sm:inline">Live Proxy Test</span>
-            <span className="sm:hidden">Test</span>
-          </SketchButton>
         </div>
       </div>
     </header>

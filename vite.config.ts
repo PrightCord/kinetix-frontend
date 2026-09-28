@@ -7,7 +7,8 @@ function kinetixMockApiPlugin(): Plugin {
     name: 'kinetix-mock-api',
     configureServer(server) {
       server.middlewares.use((req: any, res: any, next: any) => {
-        const url = req.url || '';
+        const rawUrl = req.url || '';
+        const url = rawUrl.startsWith('/admin') ? rawUrl.replace(/^\/admin/, '') : rawUrl;
 
         if (url === '/healthz') {
           res.setHeader('Content-Type', 'application/json');
