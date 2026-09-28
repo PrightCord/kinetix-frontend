@@ -3,11 +3,12 @@ import { Users, Plus, ShieldCheck, Clock, AlertTriangle, RefreshCw, KeyRound, Sp
 import { Account, Provider } from '../../types';
 import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
 import { formatCurrency, formatTokens, DESIGN_TOKENS } from '../../lib/designSystem';
+import { Kinetix } from '../../lib/resources';
 
 interface AccountsViewProps {
   accounts: Account[];
   providers: Provider[];
-  onAddAccount: (acc: Account) => void;
+  onAddAccount: (acc: Account & { apiKey?: string }) => void;
   onUpdateAccount: (acc: Account) => void;
   onDeleteAccount: (accountId: string) => void;
 }
@@ -25,16 +26,37 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
   const [providerId, setProviderId] = useState(providers[0]?.id || '');
   const [apiKey, setApiKey] = useState('');
   const [softQuota, setSoftQuota] = useState(100);
+  const [accountValidation, setAccountValidation] = useState<{ valid: boolean; problems: string[] } | null>(null);
+  const [validatingAccount, setValidatingAccount] = useState(false);
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleValidateAccount = async () => {
+    const prov = providers.find((p) => p.id === providerId) || providers[0];
+    if (!label.trim() || !apiKey.trim() || !prov) return;
+    setValidatingAccount(true);
+    try {
+      const r = await Kinetix.validateAccount({
+        provider_id: prov.id,
+        label: label.trim(),
+        api_key: apiKey.trim(),
+        quota_type: 'monthly',
+      });
+      setAccountValidation({ valid: r.valid, problems: r.problems || [] });
+    } catch (e) {
+      setAccountValidation({ valid: false, problems: [(e as Error).message] });
+    } finally {
+      setValidatingAccount(false);
+    }
+  };
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!label.trim() || !apiKey.trim()) return;
 
     const prov = providers.find((p) => p.id === providerId) || providers[0];
     const masked = apiKey.slice(0, 6) + '...' + apiKey.slice(-4);
 
-    const newAcc: Account = {
-      id: `acc-${Date.now()}`,
+    const newAcc: Account & { apiKey?: string } = {
+      id: '',
       providerId: prov.id,
       providerName: prov.name,
       label: label.trim(),
@@ -46,6 +68,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
       requestsCount: 0,
       tokensCount: 0,
       priority: accounts.length + 1,
+      apiKey: apiKey.trim(),
     };
 
     onAddAccount(newAcc);
@@ -214,7 +237,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                           onDeleteAccount(acc.id);
                           setConfirmDeleteAccountId(null);
                         }}
-                        className="px-2 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:bg-[var(--marker-red)] cursor-pointer"
+                        className="px-2 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:brightness-90 cursor-pointer"
                       >
                         Confirm
                       </button>
@@ -332,10 +355,35 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                   >
                     Cancel
                   </SketchButton>
+                  <SketchButton
+                    type="button"
+                    variant="secondary"
+                    onClick={handleValidateAccount}
+                    disabled={validatingAccount || !label.trim() || !apiKey.trim()}
+                  >
+                    {validatingAccount ? 'Validating…' : 'Validate (Dry Run)'}
+                  </SketchButton>
                   <SketchButton type="submit" variant="danger" className="font-bold">
                     Save Key to Pool
                   </SketchButton>
                 </div>
+                {accountValidation && (
+                  <div
+                    className="mt-3 p-3 text-sm font-mono"
+                    style={{
+                      borderRadius: DESIGN_TOKENS.radii.wobbly,
+                      background: accountValidation.valid ? 'var(--tint-green)' : 'var(--tint-red)',
+                      border: `2px solid ${accountValidation.valid ? 'var(--pen-green)' : 'var(--marker-red)'}`,
+                    }}
+                  >
+                    <div className="font-bold mb-1">
+                      {accountValidation.valid ? 'Validate: passed' : 'Validate: problems found'}
+                    </div>
+                    {accountValidation.problems.map((p, i) => (
+                      <div key={i} style={{ color: 'var(--danger-text)' }}>• {p}</div>
+                    ))}
+                  </div>
+                )}
               </form>
             </WobblyCard>
           </div>

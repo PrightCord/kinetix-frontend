@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Play, RefreshCw, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Play, RefreshCw, Zap, CheckCircle2, ArrowRight, AlertTriangle } from 'lucide-react';
 import { VirtualKey, Route, ModelConfig } from '../types';
 import { WobblyCard, SketchButton, SketchBadge } from './HandDrawnElements';
 
@@ -9,8 +9,28 @@ interface LiveTesterModalProps {
   keys: VirtualKey[];
   routes: Route[];
   models: ModelConfig[];
-  onLogNewRequest?: (req: any) => void;
 }
+
+interface ExecMeta {
+  servingAccount: string;
+  servingProvider: string;
+  routeId: string;
+  fallbackHops: number;
+  fallbackPath: string[];
+  warnings: string[];
+  ttftMs: number;
+  latencyMs: number;
+  statusCode: number;
+}
+
+/**
+ * Sends a real request through the Kinetix pipeline via the admin-authenticated
+ * `/admin/api/test-stream` endpoint. The chosen virtual key is identified by id;
+ * the raw key never leaves the server (it is stored hashed). The SSE frames are
+ * parsed back into text for display, and the Kinetix response headers are read off
+ * the live response.
+ */
+const DEMO_MODE = import.meta.env.VITE_KINETIX_DEMO !== 'false' && import.meta.env.VITE_KINETIX_DEMO !== '0';
 
 export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
   isOpen,
@@ -20,75 +40,222 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
   models,
 }) => {
   const [selectedKeyId, setSelectedKeyId] = useState(keys[0]?.id || '');
+  const [authMode, setAuthMode] = useState<'admin' | 'raw'>('admin');
+  const [rawKey, setRawKey] = useState('');
   const [protocol, setProtocol] = useState<'openai' | 'anthropic'>('openai');
-  const [target, setTarget] = useState<string>('coder');
-  const [prompt, setPrompt] = useState<string>(
-    'Write a quick Rust function to calculate exponential backoff for an LLM pool key.'
+  const [target, setTarget] = useState<string>('');
+  const [prompt, setPrompt] = useState(
+    'REPLY BACK EXACTLY: `Testing`',
   );
-  const [simulate429, setSimulate429] = useState(false);
+  const [stream, setStream] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [streamChunks, setStreamChunks] = useState<string[]>([]);
-  const [executionMeta, setExecutionMeta] = useState<{
-    latencyMs: number;
-    ttftMs: number;
-    servingAccount: string;
-    servingProvider: string;
-    fallbackHops: number;
-    fallbackPath: string[];
-    costUsd: number;
-    tokensIn: number;
-    tokensOut: number;
-  } | null>(null);
+  const [output, setOutput] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<ExecMeta | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Resolve the real hop trace from the opaque route id (admin-only). Called
+  // after a fallback stream completes, since the hop path is no longer exposed
+  // on the client response.
+  const loadTracePath = async (routeId: string) => {
+    try {
+      const res = await fetch(`/admin/api/route-traces/${encodeURIComponent(routeId)}`, {
+        credentials: 'same-origin',
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const steps: any[] = Array.isArray(j?.steps) ? j.steps : [];
+      const path = steps.map((s: any) =>
+        s?.target ? `${s.target}: ${s.detail ?? ''}`.trim() : String(s?.detail ?? s?.stage ?? ''),
+      );
+      const hops = steps.filter((s: any) => s?.stage === 'attempt').length;
+      setMeta((m) =>
+        m ? { ...m, fallbackHops: hops > 1 ? hops - 1 : m.fallbackHops, fallbackPath: path } : m,
+      );
+    } catch {
+      /* trace is best-effort */
+    }
+  };
+
+  // Keys/routes/models arrive asynchronously; default the selection once they load.
+  useEffect(() => {
+    if (!selectedKeyId && keys.length > 0) setSelectedKeyId(keys[0].id);
+  }, [keys, selectedKeyId]);
 
   if (!isOpen) return null;
 
+  const defaultTarget =
+    routes.find((c) => c.targets.length > 0)?.name || models[0]?.upstreamModelId || '';
+  const effectiveTarget = target || defaultTarget;
+  const useRaw = authMode === 'raw';
+
   const handleRunTest = async () => {
     setIsLoading(true);
-    setStreamChunks([]);
-    setExecutionMeta(null);
+    setOutput('');
+    setError(null);
+    setMeta(null);
 
-    const isFallback = simulate429 && target === 'coder';
-
-    // Mock realistic streaming response from proxy
-    const sampleTokens = [
-      'Here is the exponential backoff function in Rust for Kinetix:\n\n',
-      '```rust\n',
-      'use std::time::Duration;\n\n',
-      'pub fn calculate_backoff(attempt: u32, base_ms: u64, max_ms: u64) -> Duration {\n',
-      '    let exp = 2u64.saturating_pow(attempt);\n',
-      '    let millis = (base_ms * exp).min(max_ms);\n',
-      '    Duration::from_millis(millis)\n',
-      '}\n',
-      '```\n\n',
-      '// Handled safely before first byte: zero client interruption.',
-    ];
-
-    // Simulate TTFT (time to first token)
-    await new Promise((r) => setTimeout(r, isFallback ? 420 : 180));
-
-    let accumulated = '';
-    for (let i = 0; i < sampleTokens.length; i++) {
-      await new Promise((r) => setTimeout(r, 60));
-      accumulated += sampleTokens[i];
-      setStreamChunks((prev) => [...prev, sampleTokens[i]]);
+    if (DEMO_MODE) {
+      const chosen = models.find((m) => m.upstreamModelId === effectiveTarget || m.id === effectiveTarget) ?? models[0];
+      setOutput(`Demo response from ${chosen?.displayName ?? effectiveTarget ?? 'Kinetix'}: Testing`);
+      setMeta({
+        servingAccount: 'Demo credential pool',
+        servingProvider: chosen?.providerName ?? 'Demo Provider',
+        routeId: 'demo-route-trace',
+        fallbackHops: effectiveTarget.includes('coder') ? 1 : 0,
+        fallbackPath: effectiveTarget.includes('coder')
+          ? ['Demo primary → simulated 429', 'Demo fallback → 200 OK']
+          : ['Demo target → 200 OK'],
+        warnings: ['Standalone demo mode: no network request was sent.'],
+        ttftMs: 86,
+        latencyMs: 312,
+        statusCode: 200,
+      });
+      setIsLoading(false);
+      return;
     }
 
-    setExecutionMeta({
-      latencyMs: isFallback ? 980 : 420,
-      ttftMs: isFallback ? 420 : 180,
-      servingAccount: isFallback
-        ? 'Gemini Team Pay-as-you-go (Fallback Account #2)'
-        : 'Gemini Free Tier (Account #1)',
-      servingProvider: 'Google Gemini',
-      fallbackHops: isFallback ? 1 : 0,
-      fallbackPath: isFallback
-        ? ['acc-gemini-free (429 RateLimit Triggered)', 'acc-gemini-paid (200 OK Fallback)']
-        : ['acc-gemini-free (200 OK)'],
-      costUsd: isFallback ? 0.0038 : 0.0001,
-      tokensIn: 840,
-      tokensOut: 245,
-    });
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const started = performance.now();
+    let ttft = 0;
+    let accumulated = '';
 
+    // Two modes (both hit the real pipeline):
+    //  - admin: server-side /admin/api/test-stream, keyed by virtual-key id, so
+    //    the raw secret never touches the browser (keys are stored hashed).
+    //  - raw:   the browser calls the public /v1 surface directly with a pasted
+    //    sk-kinetix-... key, exactly as a client like Pi would.
+    const url = useRaw
+      ? protocol === 'openai'
+        ? '/v1/chat/completions'
+        : '/v1/messages'
+      : '/admin/api/test-stream';
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let body: Record<string, unknown>;
+    if (useRaw) {
+      if (protocol === 'openai') {
+        headers['Authorization'] = `Bearer ${rawKey.trim()}`;
+      } else {
+        headers['x-api-key'] = rawKey.trim();
+        headers['anthropic-version'] = '2023-06-01';
+      }
+      body = {
+        model: effectiveTarget,
+        max_tokens: 512,
+        stream,
+        ...(protocol === 'openai'
+          ? { messages: [{ role: 'user', content: prompt }] }
+          : { messages: [{ role: 'user', content: prompt }] }),
+      };
+    } else {
+      body = {
+        key_id: selectedKeyId,
+        model: effectiveTarget,
+        prompt,
+        format: protocol,
+        stream,
+        max_tokens: 512,
+      };
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify(body),
+      });
+
+      const servedBy = parseServedBy(res.headers.get('x-kinetix-served-by') || '');
+      const routeId = res.headers.get('x-kinetix-route-id') || '';
+      const warnings = parseWarningsHeader(res.headers.get('x-kinetix-warning') || '');
+      const fallback = res.headers.get('x-kinetix-fallback') || '';
+      // The fallback header is a presence flag ('1'); the hop trace is not
+      // exposed on the response. It is fetched from the opaque route id below
+      // (admin-only) after the stream completes.
+      const parsedFallback = parseFallbackHeader(fallback);
+
+      if (!res.ok) {
+        const text = await res.text();
+        let message = `HTTP ${res.status}`;
+        try {
+          const j = JSON.parse(text);
+          message = j?.error?.message || j?.error || message;
+        } catch {
+          /* keep default */
+        }
+        setError(message);
+        setMeta({
+          servingAccount: servedBy.account,
+          servingProvider: servedBy.provider,
+          routeId,
+          warnings,
+          fallbackHops: parsedFallback.hops,
+          fallbackPath: parsedFallback.path,
+          ttftMs: 0,
+          latencyMs: Math.round(performance.now() - started),
+          statusCode: res.status,
+        });
+        return;
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('text/event-stream') && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split('\n\n');
+          buffer = frames.pop() || '';
+          for (const frame of frames) {
+            const text = extractText(frame, protocol);
+            if (text) {
+              if (!ttft) ttft = Math.round(performance.now() - started);
+              accumulated += text;
+              setOutput(accumulated);
+            }
+          }
+        }
+      } else {
+        const j = await res.json();
+        accumulated = extractNonStreamText(j, protocol);
+        setOutput(accumulated);
+        ttft = Math.round(performance.now() - started);
+      }
+
+      setMeta({
+        servingAccount: servedBy.account,
+        servingProvider: servedBy.provider,
+        routeId,
+        warnings,
+        fallbackHops: parsedFallback.hops,
+        fallbackPath: parsedFallback.path,
+        ttftMs: ttft,
+        latencyMs: Math.round(performance.now() - started),
+        statusCode: res.status,
+      });
+      // Real hop trace from the opaque route id (admin-only).
+      if (parsedFallback.hops > 0 && routeId) {
+        void loadTracePath(routeId);
+      }
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setIsLoading(false);
+      abortRef.current = null;
+    }
+  };
+
+  const handleStop = () => {
+    abortRef.current?.abort();
     setIsLoading(false);
   };
 
@@ -96,7 +263,6 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
       <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto">
         <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
-          {/* Close button */}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-1 rounded-full border-2 border-[var(--ink)] bg-[var(--surface)] hover:bg-[var(--marker-red)] hover:text-[var(--surface)] transition-colors cursor-pointer"
@@ -104,7 +270,6 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
             <X className="w-6 h-6" />
           </button>
 
-          {/* Title */}
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-[var(--marker-red)] text-[var(--surface)] border-2 border-[var(--ink)] wobbly-circle -rotate-3">
               <Zap className="w-6 h-6" />
@@ -114,7 +279,7 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                 Live Proxy Interactive Tester
               </h2>
               <p className="text-base text-[var(--ink)]/80 font-body">
-                Verify client streaming, virtual key limits, and zero-downtime route fallback in real-time.
+                Runs a real request through the Kinetix pipeline and streams the upstream result back.
               </p>
             </div>
           </div>
@@ -122,26 +287,57 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Control Panel */}
             <div className="space-y-4">
-              {/* Virtual Key Select */}
               <div>
                 <label className="block text-base font-heading font-bold text-[var(--ink)] mb-1">
                   1. Virtual Key (Authorization)
                 </label>
-                <select
-                  value={selectedKeyId}
-                  onChange={(e) => setSelectedKeyId(e.target.value)}
-                  className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none focus:border-[var(--pen-blue)]"
-                  style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
-                >
-                  {keys.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.name} ({k.key.slice(0, 14)}...)
-                    </option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('admin')}
+                    className={`py-1 px-2 border-2 border-[var(--ink)] text-xs font-heading cursor-pointer ${
+                      authMode === 'admin' ? 'bg-[var(--pen-blue)] text-[var(--surface)] font-bold' : 'bg-[var(--surface)]'
+                    }`}
+                    style={{ borderRadius: '120px 10px 100px 10px / 10px 100px 10px 120px' }}
+                  >
+                    Server-side (by key)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('raw')}
+                    className={`py-1 px-2 border-2 border-[var(--ink)] text-xs font-heading cursor-pointer ${
+                      authMode === 'raw' ? 'bg-[var(--marker-red)] text-[var(--surface)] font-bold' : 'bg-[var(--surface)]'
+                    }`}
+                    style={{ borderRadius: '120px 10px 100px 10px / 10px 100px 10px 120px' }}
+                  >
+                    Paste raw key → /v1
+                  </button>
+                </div>
+                {authMode === 'admin' ? (
+                  <select
+                    value={selectedKeyId}
+                    onChange={(e) => setSelectedKeyId(e.target.value)}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                    style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
+                  >
+                    {keys.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.name} ({k.tag})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={rawKey}
+                    onChange={(e) => setRawKey(e.target.value)}
+                    placeholder="sk-kinetix-..."
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-sm font-mono sketch-shadow-sm focus:outline-none focus:border-[var(--marker-red)]"
+                    style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
+                  />
+                )}
               </div>
 
-              {/* Protocol Dialect */}
               <div>
                 <label className="block text-base font-heading font-bold text-[var(--ink)] mb-1">
                   2. Inbound Format (Client Wire)
@@ -174,24 +370,25 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                 </div>
               </div>
 
-              {/* Model / Route selection */}
               <div>
                 <label className="block text-base font-heading font-bold text-[var(--ink)] mb-1">
                   3. Requested Model or Route
                 </label>
                 <select
-                  value={target}
+                  value={effectiveTarget}
                   onChange={(e) => setTarget(e.target.value)}
                   className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none focus:border-[var(--pen-blue)]"
                   style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
                 >
-                  <optgroup label="Routes (With Automatic Fallback)">
-                    {routes.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        ⚡ Route: {c.name} ({c.targets.length} pool targets)
-                      </option>
-                    ))}
-                  </optgroup>
+                  {routes.length > 0 && (
+                    <optgroup label="Routes (With Automatic Fallback)">
+                      {routes.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          ⚡ Route: {c.name} ({c.targets.length} pool targets)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                   <optgroup label="Direct Models">
                     {models.map((m) => (
                       <option key={m.id} value={m.upstreamModelId}>
@@ -202,49 +399,40 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                 </select>
               </div>
 
-              {/* Simulate 429 toggle */}
               <div
                 className="p-3 bg-[var(--postit)] border-2 border-[var(--ink)] sketch-shadow-sm"
                 style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
               >
-                <label className="flex items-start gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    checked={simulate429}
-                    onChange={(e) => setSimulate429(e.target.checked)}
-                    className="mt-1 w-4 h-4 accent-[var(--marker-red)]"
+                    checked={stream}
+                    onChange={(e) => setStream(e.target.checked)}
+                    className="w-4 h-4 accent-[var(--marker-red)]"
                   />
-                  <div>
-                    <span className="font-heading font-bold text-sm text-[var(--ink)]">
-                      Simulate 429 Rate Limit on Primary Key
-                    </span>
-                    <p className="text-xs text-[var(--ink)]/80 font-body">
-                      Tests Kinetix automatic fallback hops before any bytes reach the client!
-                    </p>
-                  </div>
+                  <span className="font-heading font-bold text-sm text-[var(--ink)]">
+                    Stream (SSE) response
+                  </span>
                 </label>
               </div>
 
-              {/* Submit button */}
-              <SketchButton
-                variant="danger"
-                size="lg"
-                disabled={isLoading}
-                onClick={handleRunTest}
-                className="w-full gap-2 font-heading font-bold"
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                    Streaming via Proxy...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-5 h-5 fill-[var(--surface)]" />
-                    Send Stream Request
-                  </>
-                )}
-              </SketchButton>
+              {isLoading ? (
+                <SketchButton variant="secondary" size="lg" onClick={handleStop} className="w-full gap-2 font-heading font-bold">
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  Stop Stream
+                </SketchButton>
+              ) : (
+                <SketchButton
+                  variant="danger"
+                  size="lg"
+                  disabled={useRaw ? !rawKey.trim() || !effectiveTarget : !selectedKeyId || !effectiveTarget}
+                  onClick={handleRunTest}
+                  className="w-full gap-2 font-heading font-bold"
+                >
+                  <Play className="w-5 h-5 fill-[var(--surface)]" />
+                  Send Request
+                </SketchButton>
+              )}
             </div>
 
             {/* Prompt & Output Panel */}
@@ -262,7 +450,6 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                 />
               </div>
 
-              {/* Streaming Output Box */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-base font-heading font-bold text-[var(--ink)] flex items-center gap-2">
@@ -273,28 +460,33 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                       </span>
                     )}
                   </label>
-                  {executionMeta && (
+                  {meta && (
                     <span className="text-xs text-[var(--ink)]/70 font-mono">
-                      TTFT: {executionMeta.ttftMs}ms | Total: {executionMeta.latencyMs}ms
+                      TTFT: {meta.ttftMs}ms | Total: {meta.latencyMs}ms
                     </span>
                   )}
                 </div>
 
                 <div
-                  className="w-full min-h-[160px] max-h-[220px] overflow-y-auto bg-[var(--surface)] border-2 border-[var(--ink)] p-3 font-mono text-sm sketch-shadow-sm whitespace-pre-wrap select-text"
+                  className="w-full min-h-[160px] max-h-[240px] overflow-y-auto bg-[var(--surface)] border-2 border-[var(--ink)] p-3 font-mono text-sm sketch-shadow-sm whitespace-pre-wrap select-text"
                   style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
                 >
-                  {streamChunks.length === 0 && !isLoading && (
-                    <span className="text-[var(--ink)]/40 font-body text-base">
-                      Click "Send Stream Request" to test Kinetix proxy streaming and view headers...
+                  {error && (
+                    <span className="text-[var(--danger-text)] flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      {error}
                     </span>
                   )}
-                  {streamChunks.join('')}
+                  {!error && output.length === 0 && !isLoading && (
+                    <span className="text-[var(--ink)]/40 font-body text-base">
+                      Click "Send Request" to run a live request through the proxy...
+                    </span>
+                  )}
+                  {output}
                 </div>
               </div>
 
-              {/* Execution Trace & Fallback Information */}
-              {executionMeta && (
+              {meta && (
                 <div
                   className="p-3 bg-[var(--erased)]/50 border-2 border-[var(--ink)] sketch-shadow-sm space-y-2 text-sm"
                   style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
@@ -303,12 +495,12 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-[var(--pen-green)]" />
                       <span className="font-heading font-bold text-base">
-                        Served By: {executionMeta.servingAccount}
+                        {meta.servingAccount ? `Served By: ${meta.servingAccount}` : `Route ID: ${meta.routeId || '(unknown)'}`}
                       </span>
                     </div>
-                    {executionMeta.fallbackHops > 0 ? (
+                    {meta.fallbackHops > 0 ? (
                       <SketchBadge variant="red" rotation="-1deg">
-                        ⚡ Fallback Recovered ({executionMeta.fallbackHops} hop)
+                        ⚡ Fallback Recovered ({meta.fallbackHops} hop)
                       </SketchBadge>
                     ) : (
                       <SketchBadge variant="green" rotation="1deg">
@@ -317,16 +509,16 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                     )}
                   </div>
 
-                  {executionMeta.fallbackHops > 0 && (
+                  {meta.fallbackPath.length > 0 && (
                     <div className="text-xs font-mono text-[var(--ink)] bg-[var(--surface)] p-2 border border-[var(--ink)] rounded">
                       <strong className="font-heading">Fallback Sequence:</strong>
                       <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        {executionMeta.fallbackPath.map((step, idx) => (
+                        {meta.fallbackPath.map((step, idx) => (
                           <React.Fragment key={idx}>
                             <span className={step.includes('429') ? 'text-[var(--marker-red)] font-bold' : 'text-[var(--pen-green)]'}>
                               {step}
                             </span>
-                            {idx < executionMeta.fallbackPath.length - 1 && (
+                            {idx < meta.fallbackPath.length - 1 && (
                               <ArrowRight className="w-3.5 h-3.5 text-[var(--ink)]" />
                             )}
                           </React.Fragment>
@@ -335,18 +527,58 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-4 gap-2 text-center text-xs font-mono pt-1">
-                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded">
-                      Tokens In: <strong>{executionMeta.tokensIn}</strong>
+                  {meta.warnings.length > 0 && (
+                    <div className="text-xs font-mono text-[var(--marker-orange)] bg-[var(--postit)] p-2 border border-[var(--marker-orange)] rounded">
+                      <strong className="font-heading">⚠ Portability warning:</strong>
+                      <div className="mt-1">{meta.warnings.join('; ')}</div>
                     </div>
-                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded">
-                      Tokens Out: <strong>{executionMeta.tokensOut}</strong>
+                  )}
+
+                  <div className="text-[10px] font-mono text-[var(--ink)]/60 break-all">
+                    Route ID (opaque): {meta.routeId || '(none)'}
+                    {meta.routeId && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch(
+                              `/admin/api/route-traces/${meta.routeId}`,
+                              { credentials: 'same-origin' },
+                            );
+                            const j = await r.json();
+                            if (!r.ok) {
+                              alert(j.error || `HTTP ${r.status}`);
+                              return;
+                            }
+                            const steps = (j.steps || [])
+                              .map((s: any) => `${s.stage}${s.target ? ` [${s.target}]` : ''} ${s.detail} (${s.elapsed_ms}ms)`)
+                              .join('\n');
+                            alert(
+                              `Route Trace for ${j.opaque_route_id}\n` +
+                                `request: ${j.request_id}\n` +
+                                `outcome: ${j.outcome} | commit: ${j.commit_state}\n` +
+                                `final: ${j.final_target || '(none)'}\n\n${steps}`,
+                            );
+                          } catch (e) {
+                            alert((e as Error).message);
+                          }
+                        }}
+                        className="ml-2 underline text-[var(--pen-blue)]"
+                      >
+                        resolve trace
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono pt-1">
+                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded min-w-0">
+                      Status: <strong>{meta.statusCode}</strong>
                     </div>
-                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded">
-                      Cost: <strong>${executionMeta.costUsd.toFixed(4)}</strong>
+                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded min-w-0 truncate" title={`${meta.ttftMs}ms`}>
+                      TTFT: <strong>{meta.ttftMs}ms</strong>
                     </div>
-                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded">
-                      Status: <strong className="text-[var(--pen-green)]">200 OK</strong>
+                    <div className="bg-[var(--surface)] p-1 border border-[var(--ink)] rounded min-w-0 truncate" title={`${meta.latencyMs}ms`}>
+                      Total: <strong>{meta.latencyMs}ms</strong>
                     </div>
                   </div>
                 </div>
@@ -358,3 +590,65 @@ export const LiveTesterModal: React.FC<LiveTesterModalProps> = ({
     </div>
   );
 };
+
+/** Extract display text from one SSE frame, format-aware. */
+function extractText(frame: string, protocol: 'openai' | 'anthropic'): string {
+  const dataLines = frame
+    .split('\n')
+    .filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trim());
+  if (dataLines.length === 0) return '';
+  const data = dataLines.join('\n');
+  if (data === '[DONE]') return '';
+  try {
+    const j = JSON.parse(data);
+    if (protocol === 'anthropic') {
+      if (j.type === 'content_block_delta') {
+        return j.delta?.text || j.delta?.thinking || '';
+      }
+      return '';
+    }
+    const delta = j?.choices?.[0]?.delta;
+    return delta?.content || delta?.reasoning_content || '';
+  } catch {
+    return '';
+  }
+}
+
+function extractNonStreamText(j: any, protocol: 'openai' | 'anthropic'): string {
+  try {
+    if (protocol === 'anthropic') {
+      return (j.content || [])
+        .map((b: any) => b.text || b.thinking || '')
+        .join('');
+    }
+    return j?.choices?.[0]?.message?.content || '';
+  } catch {
+    return '';
+  }
+}
+
+function parseFallbackHeader(value: string): { hops: number; path: string[] } {
+  // Presence flag only; the hop count/path are not on the response.
+  const present = value.trim() !== '' && value.trim() !== '0';
+  return { hops: present ? 1 : 0, path: [] };
+}
+
+/** Split the `X-Kinetix-Served-By` header ("Account (Provider)") into its parts. */
+function parseServedBy(value: string): { account: string; provider: string } {
+  const m = value.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (m) return { account: m[1].trim(), provider: m[2].trim() };
+  return { account: value.trim(), provider: '' };
+}
+
+/** Parse the `X-Kinetix-Warning` JSON array of portability warnings. */
+function parseWarningsHeader(value: string): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    /* ignore malformed */
+  }
+  return [value];
+}

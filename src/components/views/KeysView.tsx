@@ -3,17 +3,89 @@ import { Key, Plus, Copy, Check, ShieldAlert, Sparkles, Terminal, Trash2, Power 
 import { VirtualKey } from '../../types';
 import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
 import { formatCurrency, formatTokens } from '../../lib/designSystem';
+import { useConfirm } from '../../lib/useConfirm';
 
 interface KeysViewProps {
   keys: VirtualKey[];
-  onAddKey: (newKey: VirtualKey) => void;
+  onAddKey: (newKey: VirtualKey) => Promise<{ key: VirtualKey; fullKey: string } | null>;
   onUpdateKeyStatus: (id: string, status: 'active' | 'disabled' | 'revoked') => void;
+  onUpdateKeyIps: (id: string, ips: string[]) => void;
+  onDeleteKey?: (id: string) => void;
 }
 
-export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyStatus }) => {
+/** Inline per-key IP allowlist editor (FR-3.4). Empty means "no restriction". */
+const IpAllowlistEditor: React.FC<{
+  keyId: string;
+  current: string[];
+  onSave: (id: string, ips: string[]) => void;
+}> = ({ keyId, current, onSave }) => {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(current.join(', '));
+  return (
+    <div className="col-span-2 pt-1 border-t border-[var(--ink)]/15 flex flex-wrap items-center gap-2">
+      <span>
+        IP Allowlist:{' '}
+        <strong className="text-[var(--pen-blue)] font-mono">
+          {current.length > 0 ? current.join(', ') : 'any'}
+        </strong>
+      </span>
+      {editing ? (
+        <span className="flex items-center gap-1">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="203.0.113.0/24, 198.51.100.7"
+            className="px-2 py-0.5 text-xs font-mono border border-[var(--ink)] rounded bg-[var(--surface)] w-64"
+          />
+          <button
+            onClick={() => {
+              const ips = text
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+              onSave(keyId, ips);
+              setEditing(false);
+            }}
+            className="px-2 py-0.5 text-xs font-heading font-bold border border-[var(--ink)] bg-[var(--tint-green)] rounded cursor-pointer"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => {
+              setText(current.join(', '));
+              setEditing(false);
+            }}
+            className="px-2 py-0.5 text-xs font-heading border border-[var(--ink)]/40 bg-[var(--surface)] rounded cursor-pointer"
+          >
+            Cancel
+          </button>
+        </span>
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="px-2 py-0.5 text-xs font-heading font-bold border border-[var(--ink)]/40 bg-[var(--surface)] hover:bg-[var(--postit)] rounded cursor-pointer"
+          title="Edit the per-key IP allowlist (empty = any)"
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+};
+
+export const KeysView: React.FC<KeysViewProps> = ({
+  keys,
+  onAddKey,
+  onUpdateKeyStatus,
+  onUpdateKeyIps,
+  onDeleteKey,
+}) => {
+  const { confirm, confirmNode } = useConfirm();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-  const [newlyCreatedKey, setNewlyCreatedKey] = useState<VirtualKey | null>(null);
+  const [newlyCreatedKey, setNewlyCreatedKey] = useState<{ name: string; key: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -31,24 +103,26 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
     setTimeout(() => setCopiedKeyId(null), 2000);
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const randomHex = Array.from({ length: 16 }, () =>
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('');
-    const fullKey = `sk-kinetix-${tag.trim() || 'dev'}-${randomHex}`;
+    setIsSubmitting(true);
+    setError(null);
 
     const newKeyObj: VirtualKey = {
-      id: `key-${Date.now()}`,
-      key: fullKey,
+      id: '',
+      key: '',
       name: name.trim() || 'Untitled Key',
       owner: owner.trim() || 'Team Member',
       tag: tag.trim() || 'general',
-      allowedModels: allowedModels.split(',').map((s) => s.trim()),
-      rpmLimit: Number(rpmLimit) || 60,
-      tpmLimit: Number(tpmLimit) || 100000,
-      dailyBudget: Number(dailyBudget) || 10.0,
-      monthlyBudget: Number(monthlyBudget) || 50.0,
+      allowedModels: allowedModels
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      allowedProviders: [],
+      rpmLimit: Number(rpmLimit) || 0,
+      tpmLimit: Number(tpmLimit) || 0,
+      dailyBudget: Number(dailyBudget) || 0,
+      monthlyBudget: Number(monthlyBudget) || 0,
       currentDailySpend: 0,
       currentMonthlySpend: 0,
       createdAt: new Date().toISOString(),
@@ -58,10 +132,15 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
       totalTokens: 0,
     };
 
-    onAddKey(newKeyObj);
-    setNewlyCreatedKey(newKeyObj);
+    const result = await onAddKey(newKeyObj);
+    setIsSubmitting(false);
+    if (!result) {
+      setError('Failed to create key. See the banner for details.');
+      return;
+    }
+    // The server returns the full key exactly once (FR-3.1).
+    setNewlyCreatedKey({ name: result.key.name, key: result.fullKey });
     setShowCreateModal(false);
-    // Reset form
     setName('');
     setOwner('');
     setTag('');
@@ -69,6 +148,7 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
 
   return (
     <div className="space-y-6">
+      {confirmNode}
       {/* Top Banner & Action */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -136,8 +216,14 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {keys.map((k, idx) => {
           const rotation = idx % 2 === 0 ? '-0.5deg' : '0.5deg';
-          const dailyPct = Math.min(100, Math.round((k.currentDailySpend / k.dailyBudget) * 100));
-          const monthlyPct = Math.min(100, Math.round((k.currentMonthlySpend / k.monthlyBudget) * 100));
+          const dailyPct =
+            k.dailyBudget > 0
+              ? Math.min(100, Math.round((k.currentDailySpend / k.dailyBudget) * 100))
+              : 0;
+          const monthlyPct =
+            k.monthlyBudget > 0
+              ? Math.min(100, Math.round((k.currentMonthlySpend / k.monthlyBudget) * 100))
+              : 0;
 
           return (
             <WobblyCard
@@ -177,22 +263,12 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                   )}
                 </div>
 
-                {/* Key Masked String with Copy */}
+                {/* Key masked string (raw keys are shown once at creation) */}
                 <div className="flex items-center gap-2 bg-[var(--paper)] p-2 border-2 border-dashed border-[var(--ink)] mb-4 text-xs font-mono">
                   <span className="truncate flex-1">
-                    {k.key.slice(0, 14)}...{k.key.slice(-6)}
+                    {k.key}
                   </span>
-                  <button
-                    onClick={() => handleCopy(k.key, k.id)}
-                    className="p-1 hover:bg-[var(--erased)] border border-[var(--ink)] rounded cursor-pointer shrink-0"
-                    title="Copy virtual key"
-                  >
-                    {copiedKeyId === k.id ? (
-                      <Check className="w-3.5 h-3.5 text-[var(--pen-green)]" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5 text-[var(--ink)]" />
-                    )}
-                  </button>
+                  <span className="text-[10px] text-[var(--ink)]/50 shrink-0">shown once</span>
                 </div>
 
                 {/* Limits & Budgets */}
@@ -238,6 +314,11 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                       Allowed Models:{' '}
                       <strong className="text-[var(--pen-blue)]">{k.allowedModels.join(', ')}</strong>
                     </div>
+                    <IpAllowlistEditor
+                      keyId={k.id}
+                      current={k.allowedIps ?? []}
+                      onSave={onUpdateKeyIps}
+                    />
                   </div>
                 </div>
               </div>
@@ -270,9 +351,20 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                   )}
 
                   <button
-                    onClick={() => onUpdateKeyStatus(k.id, 'revoked')}
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Revoke and delete "${k.name}"?`,
+                        message:
+                          'The key is permanently removed from the database and its usage logs are deleted. Any client using it will immediately receive 401.',
+                        confirmLabel: 'Revoke & Delete',
+                        danger: true,
+                      });
+                      if (!ok) return;
+                      if (onDeleteKey) onDeleteKey(k.id);
+                      else onUpdateKeyStatus(k.id, 'revoked');
+                    }}
                     className="px-2 py-1 text-xs font-heading font-bold border border-[var(--ink)] bg-[var(--surface)] hover:bg-[var(--marker-red)] hover:text-[var(--surface)] rounded flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                    title="Permanently revoke key"
+                    title="Permanently revoke and delete key"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Revoke
@@ -296,15 +388,15 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
           Configure Pi to speak to Kinetix using standard OpenAI or Anthropic provider settings. Point the base URL at your Kinetix proxy:
         </p>
 
-        <div className="bg-[var(--ink)] text-[var(--paper)] p-4 rounded-lg font-mono text-sm overflow-x-auto sketch-shadow-sm border-2 border-[var(--ink)]">
+        <div className="bg-[var(--code-bg)] text-[var(--code-fg)] p-4 rounded-lg font-mono text-sm overflow-x-auto sketch-shadow-sm border-2 border-[var(--ink)]">
           <pre>{`// ~/.pi/config.json
 {
   "providers": {
     "kinetix": {
-      "baseUrl": "https://kinetix-proxy.internal.run.app/v1",
-      "apiKey": "sk-kinetix-alice-8f921a9c402e",
+      "baseUrl": "${window.location.origin}/v1",
+      "apiKey": "<paste the sk-kinetix-... key shown at creation>",
       "api": "openai-completions",
-      "models": ["coder", "fast", "gemini-pro"]
+      "models": ["coder", "free"]
     }
   }
 }`}</pre>
@@ -381,7 +473,7 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                   </label>
                   <input
                     type="text"
-                    placeholder="* or coder, fast, gemini-*"
+                    placeholder="* or coder, free, gemini-*"
                     value={allowedModels}
                     onChange={(e) => setAllowedModels(e.target.value)}
                     className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
@@ -451,6 +543,7 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">
+                  {error && <span className="text-xs text-[var(--danger-text)] font-mono self-center">{error}</span>}
                   <SketchButton
                     type="button"
                     variant="ghost"
@@ -458,8 +551,8 @@ export const KeysView: React.FC<KeysViewProps> = ({ keys, onAddKey, onUpdateKeyS
                   >
                     Cancel
                   </SketchButton>
-                  <SketchButton type="submit" variant="danger" className="font-bold">
-                    Generate Virtual Key
+                  <SketchButton type="submit" variant="danger" className="font-bold" disabled={isSubmitting}>
+                    {isSubmitting ? 'Generating…' : 'Generate Virtual Key'}
                   </SketchButton>
                 </div>
               </form>

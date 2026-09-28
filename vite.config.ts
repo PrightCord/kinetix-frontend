@@ -1,22 +1,25 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
-export default defineConfig(() => {
-  return {
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+// The build output lands in ./dist, which rust-embed bakes into the Kinetix
+// binary at compile time.
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  // Assets resolve under /admin/assets/... so the whole SPA lives under the
+  // router's /admin/{*path} catch-all (the admin API owns /admin/api/*).
+  base: '/admin/',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
+  server: {
+    port: 3000,
+    // Proxy API calls to a locally running Kinetix during development.
+    proxy: {
+      '/admin/api': 'http://127.0.0.1:8080',
+      '/v1': 'http://127.0.0.1:8080',
+      '/healthz': 'http://127.0.0.1:8080',
     },
-    server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
-    },
-  };
+  },
 });
