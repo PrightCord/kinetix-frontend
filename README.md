@@ -2,13 +2,13 @@
 
 Standalone UI workbench for redesigning the Kinetix admin dashboard without requiring a live backend.
 
-This branch is synchronized with `PrightCord/kinetix` main at `ab6c401`, including the model reconciliation, capability probe, pricing sync, credential-enrollment, plugin catalog/auth, account testing, route, and settings changes from Kinetix PR #156.
+This branch is synchronized with `PrightCord/kinetix` PR #158 head at `de36d0d`, including client connection-profile generation for Pi, Claude Code, Codex, and OpenCode on top of the current model, credential, plugin, routing, and settings contract.
 
 ## Demo mode
 
 Demo mode is enabled by default and now covers the current dashboard contract, including:
 
-- virtual keys, routes, providers, accounts, aliases, usage, requests, audit, health, and settings
+- virtual keys, client connection profiles, routes, providers, accounts, aliases, usage, requests, audit, health, and settings
 - provider discovery and cached discovery state
 - model lifecycle reconciliation, accept/ignore/pin actions, and lifecycle scheduler settings
 - pricing provenance and provider pricing sync
