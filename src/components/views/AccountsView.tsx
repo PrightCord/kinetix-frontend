@@ -339,7 +339,7 @@ export const AccountsView: React.FC<AccountsViewProps> = ({
                             <StatusBadge
                               variant={
                                 acc.status === 'healthy'
-                                  ? 'healthy'
+                                  ? 'neutral'
                                   : acc.status === 'cooldown'
                                   ? 'danger'
                                   : 'warning'

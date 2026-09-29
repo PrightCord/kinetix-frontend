@@ -485,6 +485,8 @@ export default function App() {
         <TopBar
           activeTab={activeTab}
           metrics={metrics}
+          accounts={accounts}
+          requests={requests}
           onOpenTester={() => setIsTesterOpen(true)}
           onOpenNav={() => setNavOpen(true)}
           onRefresh={refresh}

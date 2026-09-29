@@ -40,10 +40,10 @@ export const Card: React.FC<CardProps> = ({
       {...props}
     >
       {(title || subtitle || action) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--border)]">
           <div>
-            {title && <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>}
-            {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
+            {title && <h3 className="text-[13px] md:text-sm font-semibold text-[var(--text-primary)] font-sans tracking-tight">{title}</h3>}
+            {subtitle && <p className="text-xs text-[var(--text-secondary)] mt-0.5 font-sans">{subtitle}</p>}
           </div>
           {action && <div className="flex items-center gap-2">{action}</div>}
         </div>
@@ -55,7 +55,7 @@ export const Card: React.FC<CardProps> = ({
 
 // --- Button ----------------------------------------------------------------
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'terminal' | 'outline';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'terminal' | 'outline' | 'tonal';
   size?: 'xs' | 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: React.ReactNode;
@@ -89,6 +89,8 @@ export const Button: React.FC<ButtonProps> = ({
       'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-transparent',
     terminal:
       'bg-[#09090c] text-[var(--terminal-green)] font-mono border border-[var(--border-strong)] hover:border-[var(--terminal-green)] active:translate-y-px',
+    tonal:
+      'bg-[var(--primary-bg)] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-white border border-[var(--primary-border)] active:translate-y-px transition-colors',
     outline:
       'bg-transparent text-[var(--text-primary)] border border-[var(--border-strong)] hover:bg-[var(--surface-hover)]',
   }[variant];
@@ -248,6 +250,8 @@ export interface TerminalPanelProps {
   copyText?: string;
   className?: string;
   maxHeight?: string;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 }
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({
@@ -256,10 +260,14 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   copyText,
   className = '',
   maxHeight = 'max-h-72',
+  collapsible = true,
+  defaultCollapsed = true,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(collapsible ? defaultCollapsed : false);
 
-  const handleCopy = () => {
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!copyText) return;
     navigator.clipboard.writeText(copyText);
     setCopied(true);
@@ -267,28 +275,62 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   };
 
   return (
-    <div className={`border border-[var(--border)] rounded-[6px] bg-[#09090c] overflow-hidden ${className}`}>
+    <div className={`border border-[var(--border)] rounded-[6px] bg-[#09090c] overflow-hidden transition-all ${className}`}>
       {title && (
-        <div className="flex items-center justify-between px-3 py-2 bg-[var(--surface-raised)] border-b border-[var(--border)] font-mono text-xs text-[var(--text-muted)]">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--text-muted)] opacity-60" />
-            <span className="font-semibold text-[var(--text-secondary)]">{title}</span>
+        <div
+          onClick={() => collapsible && setIsCollapsed(!isCollapsed)}
+          className={`flex items-center justify-between px-3.5 py-2 bg-[var(--surface-raised)] border-b border-[var(--border)] font-mono text-xs select-none ${
+            collapsible ? 'cursor-pointer hover:bg-[var(--surface-hover)]' : ''
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-[var(--healthy)] opacity-80 shrink-0" />
+            <span className="font-semibold text-[var(--text-primary)] truncate">{title}</span>
+            {collapsible && isCollapsed && (
+              <span className="text-[11px] text-[var(--text-muted)] hidden sm:inline">
+                (stream active · click to expand)
+              </span>
+            )}
           </div>
-          {copyText && (
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer transition-colors"
-              title="Copy contents"
-            >
-              {copied ? <Check className="w-3.5 h-3.5 text-[var(--healthy)]" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? 'Copied' : 'Copy'}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3 shrink-0">
+            {collapsible && (
+              <span className="text-xs text-[var(--text-secondary)] font-sans hover:text-[var(--text-primary)] flex items-center gap-1 font-medium">
+                {isCollapsed ? 'Expand ▾' : 'Collapse ▴'}
+              </span>
+            )}
+            {copyText && (
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-colors"
+                title="Copy contents"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-[var(--healthy)]" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
-      <div className={`p-3 font-mono text-xs overflow-y-auto leading-relaxed text-[var(--text-primary)] ${maxHeight}`}>
-        {children}
-      </div>
+      {!isCollapsed ? (
+        <div className={`p-3 font-mono text-xs overflow-y-auto leading-relaxed text-[var(--text-primary)] ${maxHeight}`}>
+          {children}
+        </div>
+      ) : (
+        <div
+          onClick={() => setIsCollapsed(false)}
+          className="px-3.5 py-2 font-mono text-xs text-[var(--text-secondary)] cursor-pointer hover:bg-[#0e0e13] flex items-center justify-between gap-2 border-t border-[var(--border-subtle)]"
+        >
+          <div className="truncate flex items-center gap-2">
+            <span className="text-[var(--text-muted)]">&gt;</span>
+            <span className="text-[var(--text-secondary)] truncate">
+              [telemetry] Gateway nominal • Active streams buffer 0 drops • Health check scheduled
+            </span>
+          </div>
+          <span className="text-[11px] text-[var(--text-muted)] shrink-0 font-sans hover:underline">
+            [+] Show 5 events
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -300,6 +342,7 @@ export interface MetricBoxProps {
   subtext?: string;
   indicator?: 'healthy' | 'warning' | 'danger' | 'info' | 'neutral';
   icon?: React.ReactNode;
+  period?: string;
   className?: string;
 }
 
@@ -307,8 +350,9 @@ export const MetricBox: React.FC<MetricBoxProps> = ({
   label,
   value,
   subtext,
-  indicator,
+  indicator = 'neutral',
   icon,
+  period,
   className = '',
 }) => {
   const indicatorColor = {
@@ -316,19 +360,28 @@ export const MetricBox: React.FC<MetricBoxProps> = ({
     warning: 'text-[var(--warning)]',
     danger: 'text-[var(--danger)]',
     info: 'text-[var(--info)]',
-    neutral: 'text-[var(--text-muted)]',
-  }[indicator || 'neutral'];
+    neutral: 'text-[var(--text-primary)]',
+  }[indicator];
 
   return (
-    <div className={`p-3.5 rounded-[6px] bg-[var(--surface)] border border-[var(--border)] ${className}`}>
+    <div className={`p-3.5 rounded-[6px] bg-[var(--surface)] border border-[var(--border)] transition-colors ${className}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
-        {icon && <span className="text-[var(--text-muted)]">{icon}</span>}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs font-semibold text-[var(--text-secondary)] font-sans uppercase tracking-wider truncate">
+            {label}
+          </span>
+          {period && (
+            <span className="text-[11px] font-mono text-[var(--text-muted)] shrink-0">
+              [{period}]
+            </span>
+          )}
+        </div>
+        {icon && <span className="text-[var(--text-secondary)] shrink-0">{icon}</span>}
       </div>
-      <div className={`text-2xl font-semibold tracking-tight mt-1 font-mono tabular-nums ${indicator ? indicatorColor : 'text-[var(--text-primary)]'}`}>
+      <div className={`text-2xl font-bold tracking-tight mt-1 font-mono tabular-nums ${indicatorColor}`}>
         {value}
       </div>
-      {subtext && <div className="text-xs text-[var(--text-muted)] mt-1 truncate">{subtext}</div>}
+      {subtext && <div className="text-xs text-[var(--text-secondary)] font-sans mt-1 truncate">{subtext}</div>}
     </div>
   );
 };

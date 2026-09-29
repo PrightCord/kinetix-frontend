@@ -210,7 +210,7 @@ export const RequestsView: React.FC<RequestsViewProps> = ({ requests, liveReques
                             ⚡ RECOVERED
                           </StatusBadge>
                         ) : r.status === 'success' ? (
-                          <StatusBadge variant="healthy" size="sm">
+                          <StatusBadge variant="neutral" size="sm" dot={false}>
                             200 OK
                           </StatusBadge>
                         ) : (
