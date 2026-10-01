@@ -1,74 +1,52 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  Activity,
-  ShieldAlert,
-  ShieldCheck,
-  TimerReset,
-  RefreshCw,
-  Clock,
-  Layers,
-  Zap,
-  TrendingDown,
-  AlertTriangle,
-} from 'lucide-react';
+import { Activity, RefreshCw, ShieldAlert, TimerReset } from 'lucide-react';
 import { api } from '../../lib/api';
-import { Card, Button, StatusBadge, MetricBox } from '../KinetixUI';
+import { SketchBadge, SketchButton } from '../HandDrawnElements';
 
 type WindowKey = '5m' | '1h' | '24h';
 type ScopeKey = 'all' | 'provider' | 'account' | 'model';
 
 interface Circuit {
   provider_id: string;
-  provider_name?: string;
-  state: 'closed' | 'open' | 'half-open';
+  state: 'closed' | 'open' | 'half_open';
   recent_qualifying_failures: number;
   distinct_failing_accounts: number;
   distinct_failing_targets: number;
-  recent_failures: Array<{
-    account_id: string;
-    target_id: string;
-    observed_at?: string;
-  }>;
+  recent_failures: Array<{ at: string; account_id: string; target_id: string }>;
   retry_at?: string | null;
   last_successful_probe?: string | null;
 }
 
-interface Quota {
-  provider_id: string;
-  account_id: string;
+interface QuotaEvidence {
   remaining_fraction?: number | null;
   reset_at?: string | null;
-  freshness: string;
+  observed_at: string;
   source: string;
-  observed_at?: string | null;
-  routing?: {
-    remaining_fraction?: number | null;
-    reset_at?: string | null;
-    routing_eligible?: boolean;
-    source: string;
-    observed_at?: string | null;
-  } | null;
+  freshness: 'fresh' | 'stale';
+  routing_eligible?: boolean;
+}
+
+interface Quota extends QuotaEvidence {
+  provider_id: string;
+  account_id: string;
+  routing: (QuotaEvidence & { scope: 'account-global'; routing_eligible: boolean }) | null;
 }
 
 interface Telemetry {
-  scope: string;
-  target?: string;
-  provider_id?: string;
-  account_id?: string;
-  model_id?: string;
+  scope: 'provider' | 'account' | 'model';
+  provider_id: string;
+  account_id?: string | null;
+  model_id?: string | null;
   attempts: number;
-  requests?: number;
-  success?: number;
-  success_rate: number;
+  success_rate?: number | null;
+  fallback_failures: number;
+  fallbacks: number;
+  cancellations: number;
   rate_limits: number;
   quota_exhausted: number;
   auth_errors: number;
   target_errors: number;
   bad_requests: number;
-  client_4xx: number;
-  fallbacks: number;
-  fallback_failures: number;
-  cancellations: number;
   server_5xx: number;
   connection_errors: number;
   timeouts: number;
@@ -91,22 +69,22 @@ interface RuntimeHealth {
 }
 
 function pct(value?: number | null): string {
-  return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
+  return value == null ? 'unknown' : `${(value * 100).toFixed(1)}%`;
 }
 
 function ms(value?: number | null): string {
-  return value == null ? '—' : `${Math.round(value)}ms`;
+  return value == null ? '—' : `${value} ms`;
 }
 
 function when(value?: string | null): string {
   if (!value) return '—';
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleTimeString();
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
 export function HealthView() {
   const [windowKey, setWindowKey] = useState<WindowKey>('1h');
-  const [scopeKey, setScopeKey] = useState<ScopeKey>('all');
+  const [scopeKey, setScopeKey] = useState<ScopeKey>('model');
   const [data, setData] = useState<RuntimeHealth | null>(null);
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -128,218 +106,249 @@ export function HealthView() {
   }, [refresh]);
 
   const telemetryRows =
-    data?.telemetry.filter((row) => scopeKey === 'all' || row.scope === scopeKey) ?? [];
-  const openCircuits = data?.provider_circuits.filter((circuit) => circuit.state !== 'closed') ?? [];
+    data?.telemetry?.filter((row) => scopeKey === 'all' || row.scope === scopeKey) ?? [];
+  const openCircuits = data?.provider_circuits?.filter((circuit) => circuit.state !== 'closed') ?? [];
 
   return (
     <div className="space-y-6">
-      {/* Header and Window Controls */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Runtime Health &amp; Concurrency
-          </h2>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Circuit breaker trip states, latency percentiles, adaptive saturation, and quota evidence.
+          <h2 className="font-heading text-3xl font-bold text-[var(--ink)]">Runtime Health</h2>
+          <p className="font-body text-sm text-[var(--ink)]/65 mt-1">
+            Live provider circuits, diagnostic quota buckets, account-global routing evidence, and persisted target telemetry.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-[4px] border border-[var(--border)] bg-[var(--surface-raised)] p-0.5 text-xs font-mono">
-            {(['5m', '1h', '24h'] as WindowKey[]).map((w) => (
-              <button
-                key={w}
-                onClick={() => setWindowKey(w)}
-                className={`px-2.5 py-1 rounded-[3px] transition-colors cursor-pointer ${
-                  windowKey === w
-                    ? 'bg-[var(--surface)] text-[var(--text-primary)] font-semibold shadow-xs'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {w}
-              </button>
-            ))}
-          </div>
-
-          <Button size="sm" variant="secondary" onClick={() => void refresh()} isLoading={loading}>
-            <RefreshCw className="w-3.5 h-3.5" />
+        <div className="flex flex-wrap items-center gap-2">
+          {(['5m', '1h', '24h'] as WindowKey[]).map((value) => (
+            <SketchButton
+              key={value}
+              onClick={() => setWindowKey(value)}
+              variant={windowKey === value ? 'primary' : 'secondary'}
+              size="sm"
+            >
+              {value}
+            </SketchButton>
+          ))}
+          <SketchButton onClick={() => void refresh()} variant="secondary" size="sm">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
+          </SketchButton>
         </div>
       </div>
 
       {error && (
-        <div className="p-3 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-[4px] text-xs font-mono text-[var(--danger)]">
+        <div className="border-2 border-[var(--marker-red)] p-3 font-body text-sm text-[var(--marker-red)]">
           {error}
         </div>
       )}
 
-      {/* Industrial Health KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <MetricBox
-          label="Circuit Breakers"
-          value={openCircuits.length === 0 ? 'ALL CLOSED' : `${openCircuits.length} TRIPPED`}
-          subtext={openCircuits.length === 0 ? 'Normal routing to all providers' : 'Failover active'}
-          indicator={openCircuits.length === 0 ? 'healthy' : 'danger'}
-          icon={<ShieldCheck className="w-4 h-4" />}
-        />
-        <MetricBox
-          label="Telemetry Dropped"
-          value={(data?.dropped.queue ?? 0) + (data?.dropped.persistence ?? 0)}
-          subtext="0 buffer pressure dropouts"
-          indicator="neutral"
-          icon={<Activity className="w-4 h-4" />}
-        />
-        <MetricBox
-          label="Fresh Quota Evidence"
-          value={data?.quota.filter((q) => q.freshness === 'fresh').length ?? 0}
-          subtext="Active routing eligibility"
-          indicator="info"
-          icon={<TimerReset className="w-4 h-4" />}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="border-2 border-[var(--ink)] p-4 bg-[var(--surface)] sketch-shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-heading font-bold">
+            <ShieldAlert className="w-4 h-4" /> Provider circuits
+          </div>
+          <div className="text-3xl font-heading font-bold mt-2">{openCircuits.length}</div>
+          <div className="font-body text-xs text-[var(--ink)]/60">open or half-open</div>
+        </div>
+        <div className="border-2 border-[var(--ink)] p-4 bg-[var(--surface)] sketch-shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-heading font-bold">
+            <TimerReset className="w-4 h-4" /> Fresh diagnostic observations
+          </div>
+          <div className="text-3xl font-heading font-bold mt-2">
+            {data?.quota?.filter((quota) => quota.freshness === 'fresh').length ?? 0}
+          </div>
+          <div className="font-body text-xs text-[var(--ink)]/60">routing eligibility is shown below</div>
+        </div>
+        <div className="border-2 border-[var(--ink)] p-4 bg-[var(--surface)] sketch-shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-heading font-bold">
+            <Activity className="w-4 h-4" /> Telemetry drops
+          </div>
+          <div className="text-3xl font-heading font-bold mt-2">
+            {(data?.dropped?.queue ?? 0) + (data?.dropped?.persistence ?? 0)}
+          </div>
+          <div className="font-body text-xs text-[var(--ink)]/60">queue + persistence</div>
+        </div>
       </div>
 
-      {/* Provider Circuits Table */}
-      <Card
-        title="Provider Circuit Breakers"
-        subtitle="Automatic backoff on upstream 429 / 5xx cascades. Tripped circuits failover immediately."
-      >
-        <div className="overflow-x-auto">
-          <table className="kinetix-table font-mono text-xs">
-            <thead>
-              <tr>
-                <th>Provider ID</th>
-                <th>Circuit State</th>
-                <th>Qualifying Failures</th>
-                <th>Failing Accounts / Targets</th>
-                <th>Auto-Retry Next Probe</th>
-                <th>Last Success Recovery</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-subtle)]">
-              {(data?.provider_circuits ?? []).map((c) => (
-                <tr key={c.provider_id}>
-                  <td className="font-semibold text-[var(--text-primary)]">
-                    {c.provider_name || c.provider_id}
-                  </td>
-                  <td>
-                    <StatusBadge
-                      variant={c.state === 'closed' ? 'healthy' : c.state === 'half-open' ? 'warning' : 'danger'}
-                      size="sm"
-                    >
-                      {c.state.toUpperCase()}
-                    </StatusBadge>
-                  </td>
-                  <td>{c.recent_qualifying_failures}</td>
-                  <td>
-                    {c.distinct_failing_accounts} accounts / {c.distinct_failing_targets} targets
-                  </td>
-                  <td>{when(c.retry_at)}</td>
-                  <td>{when(c.last_successful_probe)}</td>
-                </tr>
-              ))}
-              {data?.provider_circuits.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="text-center py-4 text-[var(--text-muted)] font-sans">
-                    No circuit breaker events recorded.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <section className="border-2 border-[var(--ink)] bg-[var(--surface)] overflow-x-auto">
+        <div className="p-4 border-b-2 border-[var(--ink)]">
+          <h3 className="font-heading text-xl font-bold">Provider circuits</h3>
         </div>
-      </Card>
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="text-left border-b border-[var(--ink)]/30">
+              <th className="p-3">Provider</th>
+              <th className="p-3">State</th>
+              <th className="p-3">Failures</th>
+              <th className="p-3">Accounts / targets</th>
+              <th className="p-3">Latest failure</th>
+              <th className="p-3">Retry</th>
+              <th className="p-3">Last recovery</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.provider_circuits ?? []).map((circuit) => {
+              const lastFailure = circuit.recent_failures && Array.isArray(circuit.recent_failures) && circuit.recent_failures.length > 0
+                ? circuit.recent_failures[circuit.recent_failures.length - 1]
+                : null;
 
-      {/* Target Telemetry Percentiles Table */}
-      <Card
-        title={`Latency & Concurrency Telemetry (${windowKey})`}
-        subtitle="Detailed TTFT, duration percentiles, saturation, and failure classification"
-        action={
-          <div className="flex items-center gap-1 text-xs font-mono">
-            {(['all', 'provider', 'account', 'model'] as ScopeKey[]).map((s) => (
-              <button
-                key={s}
-                onClick={() => setScopeKey(s)}
-                className={`px-2 py-0.5 rounded-[3px] capitalize cursor-pointer ${
-                  scopeKey === s
-                    ? 'bg-[var(--primary)] text-white font-medium'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                }`}
+              return (
+                <tr key={circuit.provider_id} className="border-b border-[var(--ink)]/10">
+                  <td className="p-3 font-mono">{circuit.provider_id}</td>
+                  <td className="p-3">
+                    <SketchBadge variant={circuit.state === 'closed' ? 'green' : 'red'}>
+                      {circuit.state}
+                    </SketchBadge>
+                  </td>
+                  <td className="p-3">{circuit.recent_qualifying_failures ?? 0}</td>
+                  <td className="p-3">
+                    {circuit.distinct_failing_accounts ?? 0} / {circuit.distinct_failing_targets ?? 0}
+                  </td>
+                  <td className="p-3 font-mono text-xs">
+                    {lastFailure
+                      ? `${lastFailure.account_id} · ${lastFailure.target_id}`
+                      : '—'}
+                  </td>
+                  <td className="p-3">{when(circuit.retry_at)}</td>
+                  <td className="p-3">{when(circuit.last_successful_probe)}</td>
+                </tr>
+              );
+            })}
+            {data && (data.provider_circuits?.length ?? 0) === 0 && (
+              <tr><td className="p-4 text-[var(--ink)]/60" colSpan={7}>No provider circuit observations yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="border-2 border-[var(--ink)] bg-[var(--surface)] overflow-x-auto">
+        <div className="p-4 border-b-2 border-[var(--ink)]">
+          <h3 className="font-heading text-xl font-bold">Quota evidence</h3>
+          <p className="font-body text-sm text-[var(--ink)]/60 mt-1">
+            Diagnostic observations are separate from account-global evidence eligible for adaptive routing.
+          </p>
+        </div>
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="text-left border-b border-[var(--ink)]/30">
+              <th className="p-3">Provider</th>
+              <th className="p-3">Account</th>
+              <th className="p-3">Diagnostic remaining / reset</th>
+              <th className="p-3">Diagnostic source</th>
+              <th className="p-3">Account-global remaining / reset</th>
+              <th className="p-3">Adaptive routing source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.quota ?? []).map((quota) => (
+              <tr key={`${quota.provider_id}:${quota.account_id}`} className="border-b border-[var(--ink)]/10">
+                <td className="p-3 font-mono">{quota.provider_id}</td>
+                <td className="p-3 font-mono">{quota.account_id}</td>
+                <td className="p-3">
+                  {pct(quota.remaining_fraction)}
+                  <div className="text-xs text-[var(--ink)]/60">reset: {when(quota.reset_at)}</div>
+                </td>
+                <td className="p-3 font-mono text-xs">
+                  <div>{quota.source}</div>
+                  <SketchBadge variant={quota.freshness === 'fresh' ? 'green' : 'yellow'}>
+                    {quota.freshness} diagnostic
+                  </SketchBadge>
+                  <div className="font-sans text-[var(--ink)]/60">observed: {when(quota.observed_at)}</div>
+                </td>
+                <td className="p-3">
+                  {quota.routing ? (
+                    <>
+                      {pct(quota.routing.remaining_fraction)}
+                      <div className="text-xs text-[var(--ink)]/60">reset: {when(quota.routing.reset_at)}</div>
+                    </>
+                  ) : (
+                    <span className="text-[var(--ink)]/60">unknown — no account-global evidence</span>
+                  )}
+                </td>
+                <td className="p-3 font-mono text-xs">
+                  {quota.routing ? (
+                    <>
+                      <div>{quota.routing.source}</div>
+                      <SketchBadge variant={quota.routing.routing_eligible ? 'green' : 'yellow'}>
+                        {quota.routing.routing_eligible ? 'eligible' : 'stale / neutral'}
+                      </SketchBadge>
+                      <div className="font-sans text-[var(--ink)]/60">observed: {when(quota.routing.observed_at)}</div>
+                    </>
+                  ) : '—'}
+                </td>
+              </tr>
+            ))}
+            {data && (data.quota?.length ?? 0) === 0 && (
+              <tr><td className="p-4 text-[var(--ink)]/60" colSpan={6}>No quota observations yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="border-2 border-[var(--ink)] bg-[var(--surface)] overflow-x-auto">
+        <div className="p-4 border-b-2 border-[var(--ink)] flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-heading text-xl font-bold">Target telemetry · {windowKey}</h3>
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'provider', 'account', 'model'] as ScopeKey[]).map((value) => (
+              <SketchButton
+                key={value}
+                onClick={() => setScopeKey(value)}
+                variant={scopeKey === value ? 'primary' : 'secondary'}
+                size="sm"
               >
-                {s}
-              </button>
+                {value}
+              </SketchButton>
             ))}
           </div>
-        }
-      >
-        <div className="overflow-x-auto">
-          <table className="kinetix-table font-mono text-xs">
-            <thead>
-              <tr>
-                <th>Scope</th>
-                <th>Target Identifier</th>
-                <th>Attempts</th>
-                <th>Success %</th>
-                <th>TTFT (P50 / P95 / P99)</th>
-                <th>Duration (P50 / P95 / P99)</th>
-                <th>5xx / Timeout</th>
-                <th>Rate / Quota</th>
-                <th>Failover Hops</th>
-                <th>Saturation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-subtle)]">
-              {telemetryRows.map((r, i) => (
-                <tr key={i}>
-                  <td>
-                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
-                      {r.scope}
-                    </span>
-                  </td>
-                  <td className="font-semibold text-[var(--text-primary)]">
-                    {r.target || r.provider_id || r.account_id || r.model_id || 'Global'}
-                  </td>
-                  <td>{r.attempts ?? r.requests ?? 0}</td>
-                  <td>
-                    <span className="text-[var(--healthy)] font-semibold">{pct(r.success_rate)}</span>
-                  </td>
-                  <td>
-                    {ms(r.ttft_p50_ms)} / {ms(r.ttft_p95_ms)} / {ms(r.ttft_p99_ms)}
-                  </td>
-                  <td>
-                    {ms(r.duration_p50_ms)} / {ms(r.duration_p95_ms)} / {ms(r.duration_p99_ms)}
-                  </td>
-                  <td>
-                    <span className={r.server_5xx > 0 ? 'text-[var(--danger)] font-bold' : ''}>
-                      {r.server_5xx}
-                    </span>{' '}
-                    / {r.timeouts}
-                  </td>
-                  <td>
-                    <span className={r.rate_limits > 0 ? 'text-[var(--warning)] font-bold' : ''}>
-                      {r.rate_limits}
-                    </span>{' '}
-                    / {r.quota_exhausted}
-                  </td>
-                  <td>{r.fallbacks}</td>
-                  <td>
-                    <span className="text-[var(--text-muted)]">
-                      {r.adaptive_saturation != null ? `${(r.adaptive_saturation * 100).toFixed(0)}%` : '0%'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {telemetryRows.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="text-center py-6 text-[var(--text-muted)] font-sans">
-                    No telemetry records available for this filter window.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
-      </Card>
+        <table className="w-full min-w-[1320px] text-sm">
+          <thead>
+            <tr className="text-left border-b border-[var(--ink)]/30">
+              <th className="p-3">Scope</th>
+              <th className="p-3">Provider / account / model</th>
+              <th className="p-3">Attempts</th>
+              <th className="p-3">Success</th>
+              <th className="p-3">TTFT p50 / p95 / p99</th>
+              <th className="p-3">Duration p50 / p95 / p99</th>
+              <th className="p-3">5xx / conn / timeout</th>
+              <th className="p-3">Rate / quota</th>
+              <th className="p-3">Auth / target / bad request</th>
+              <th className="p-3">Fallback use / failures</th>
+              <th className="p-3">Cancelled</th>
+              <th className="p-3">Saturation / circuit rejects (candidates)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {telemetryRows.map((row) => (
+              <tr key={`${row.scope}:${row.provider_id}:${row.account_id ?? ''}:${row.model_id ?? ''}`} className="border-b border-[var(--ink)]/10">
+                <td className="p-3">{row.scope}</td>
+                <td className="p-3 font-mono text-xs">
+                  {row.provider_id}
+                  {row.account_id ? <><br />{row.account_id}</> : null}
+                  {row.model_id ? <><br />{row.model_id}</> : null}
+                </td>
+                <td className="p-3">{row.attempts}</td>
+                <td className="p-3">{pct(row.success_rate)}</td>
+                <td className="p-3">{ms(row.ttft_p50_ms)} / {ms(row.ttft_p95_ms)} / {ms(row.ttft_p99_ms)}</td>
+                <td className="p-3">
+                  {ms(row.duration_p50_ms)} / {ms(row.duration_p95_ms)} / {ms(row.duration_p99_ms)}
+                </td>
+                <td className="p-3">{row.server_5xx} / {row.connection_errors} / {row.timeouts}</td>
+                <td className="p-3">{row.rate_limits} / {row.quota_exhausted}</td>
+                <td className="p-3">{row.auth_errors} / {row.target_errors} / {row.bad_requests}</td>
+                <td className="p-3">
+                  {row.fallbacks} ({row.attempts > 0 ? pct(row.fallbacks / row.attempts) : '—'}) / {row.fallback_failures}
+                </td>
+                <td className="p-3">{row.cancellations}</td>
+                <td className="p-3">{row.adaptive_saturation} / {row.provider_circuit_rejects}</td>
+              </tr>
+            ))}
+            {data && telemetryRows.length === 0 && (
+              <tr><td className="p-4 text-[var(--ink)]/60" colSpan={12}>No persisted target telemetry in this window.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }

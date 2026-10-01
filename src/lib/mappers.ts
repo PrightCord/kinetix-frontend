@@ -33,6 +33,7 @@ export function mapKey(j: any): VirtualKey {
     allowedProviders: Array.isArray(j.allowed_providers) ? j.allowed_providers : [],
     rpmLimit: num(j.rpm_limit, 0),
     tpmLimit: num(j.tpm_limit, 0),
+    maxConcurrentRequests: optionalNum(j.max_concurrent_requests),
     dailyBudget: num(j.daily_budget, 0),
     monthlyBudget: num(j.monthly_budget, 0),
     currentDailySpend: num(j.current_daily_spend),
@@ -130,6 +131,11 @@ export function mapModel(j: any): ModelConfig {
       toolCalling: optionalBool(c.tool_calling),
       audio: optionalBool(c.audio),
       structuredOutput: optionalBool(c.structured_output),
+      continuationFamilies: Array.isArray(c.continuation_families)
+        ? c.continuation_families.filter(
+            (family: unknown): family is string => typeof family === 'string',
+          )
+        : [],
     },
     prices,
     parameters: (j.parameters && typeof j.parameters === 'object'
@@ -168,7 +174,16 @@ export function mapAccount(j: any): Account {
     providerName: str(j.provider_name),
     label: str(j.label),
     keyMasked: str(j.key_mask),
-    status: (j.status as Account['status']) || 'healthy',
+    status:
+      j.status === 'cooldown' ||
+      j.status === 'exhausted' ||
+      j.status === 'disabled' ||
+      j.status === 'degraded'
+        ? j.status
+        : 'healthy',
+    statusReason: str(j.status_reason, 'unknown'),
+    statusChangedAt: j.status_changed_at ?? null,
+    retryAt: j.retry_at ?? null,
     cooldownUntil: j.cooldown_until ?? null,
     quotaResetTime: j.quota_reset_at ?? null,
     quotaType: (j.quota_type as Account['quotaType']) || 'none',
@@ -206,10 +221,20 @@ export function mapRoute(j: any): Route {
       modelDisplayName: str(x.model_display_name),
       priority: num(x.priority, idx + 1),
       weight: num(x.weight, 1),
+      predicate:
+        x.predicate && typeof x.predicate === 'object' && !Array.isArray(x.predicate)
+          ? { ...x.predicate }
+          : null,
+      paramOverrides:
+        x.param_overrides && typeof x.param_overrides === 'object' && !Array.isArray(x.param_overrides)
+          ? { ...x.param_overrides }
+          : null,
     })),
     portabilityPolicy: (j.portability_policy as Route['portabilityPolicy']) || 'strip_with_warning',
     cacheAffinity: !!j.cache_affinity,
     stickyRouting: !!j.sticky_routing,
+    maxAttempts: optionalNum(j.max_attempts),
+    maxConcurrentRequests: optionalNum(j.max_concurrent_requests),
     totalHops: 0,
     status: allExhausted ? 'all_exhausted' : j.enabled === false ? 'degraded' : 'active',
   };

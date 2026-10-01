@@ -23,6 +23,7 @@ export interface CreateKeyInput {
   allowed_models: string[];
   rpm_limit?: number | null;
   tpm_limit?: number | null;
+  max_concurrent_requests?: number | null;
   daily_budget?: number | null;
   monthly_budget?: number | null;
 }
@@ -33,9 +34,12 @@ export interface ClientProfileModel {
   id: string;
 }
 
+export type ClientProfileFileUsage = 'write_to' | 'merge_into' | 'source' | 'execute';
+
 export interface ClientProfileFile {
   filename: string;
   destination: string | null;
+  usage: ClientProfileFileUsage;
   content_type: string;
   content: string;
 }
@@ -64,6 +68,7 @@ export interface DiscoveredThinkingMap {
 
 export interface DiscoveredModel {
   id: string;
+  observed_at?: string;
   display_name?: string | null;
   context_window?: number | null;
   max_output_tokens?: number | null;
@@ -215,6 +220,110 @@ export interface TestResult {
   response_preview?: string;
 }
 
+export interface RouteTargetInput {
+  account_id: string | null;
+  model_id: string;
+  priority: number;
+  weight: number;
+  predicate?: Record<string, unknown> | null;
+  param_overrides?: Record<string, unknown> | null;
+}
+
+export interface RouteConfigInput {
+  route_id?: string;
+  name: string;
+  description?: string;
+  strategy: string;
+  fallback_triggers: Record<string, boolean>;
+  portability_policy: string;
+  sticky_routing?: boolean;
+  cache_affinity?: boolean;
+  max_attempts?: number | null;
+  max_concurrent_requests?: number | null;
+  targets: RouteTargetInput[];
+}
+
+export interface RouteValidationIssue {
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+  target_index?: number;
+}
+
+export interface RouteValidationResult {
+  valid: boolean;
+  route: string;
+  issues: RouteValidationIssue[];
+}
+
+export interface DryRunDescriptor {
+  frontend?: string;
+  key_tag?: string;
+  has_tools?: boolean;
+  has_images?: boolean;
+  has_reasoning?: boolean;
+  input_tokens?: number;
+  allowed_providers?: string[];
+  soft_quota_reached?: boolean;
+  allow_fallback?: boolean;
+  session?: string;
+}
+
+export interface DryRunCapabilityDetail {
+  required: boolean;
+  status: 'supported' | 'unsupported' | 'unknown';
+  eligible: boolean;
+}
+
+export interface DryRunCandidate {
+  candidate_id: string;
+  strategy_rank: number | null;
+  target: string;
+  model: string;
+  model_id: string;
+  provider: string;
+  provider_id: string;
+  account: string;
+  account_id: string;
+  account_status: string;
+  half_open_probe: boolean;
+  route_target_id: string | null;
+  priority: number;
+  weight: number;
+  predicate_result: 'true' | 'false' | 'unknown' | string;
+  predicate_explanation: string;
+  predicate_eligible: boolean;
+  capability_eligible: boolean;
+  capability_details: Record<string, DryRunCapabilityDetail | string>;
+  context_eligible: boolean;
+  provider_permitted: boolean;
+  quota_available: boolean;
+  account_quota_available: boolean;
+  provider_circuit_state: 'closed' | 'open' | 'half_open' | string;
+  provider_circuit_available: boolean;
+  provider_circuit_retry_at: string | null;
+  route_capacity_available: boolean;
+  adaptive_capacity_available: boolean | null;
+  eligible: boolean;
+  not_selected_reasons: string[];
+  selected: boolean;
+  decision_reason: string;
+}
+
+export interface DryRunResult {
+  requested_model: string;
+  route: string | null;
+  route_id: string | null;
+  strategy: string | null;
+  candidates: DryRunCandidate[];
+  would_select: string | null;
+  selection_mode: 'deterministic' | 'stochastic';
+  outcome: 'selected' | 'rate_limited' | 'no_eligible_target' | 'stochastic';
+  selection_note: string;
+  plugin_fact_failures: { plugin: string; reason: string }[];
+  note: string;
+}
+
 export interface ExportFile {
   name: string;
   day: string;
@@ -336,11 +445,17 @@ export interface PluginLimits {
   storage: string;
 }
 
+export interface PluginCompatibility {
+  min_host_version: string | null;
+  max_host_version: string | null;
+}
+
 export interface PluginSummary {
   id: string;
   name: string;
   version: string;
   plugin_api_major: number;
+  compatibility: PluginCompatibility;
   sha256: string;
   signature: string;
   status: string;
@@ -442,7 +557,7 @@ export interface PluginInstallResult {
   note?: string;
 }
 
-export const RealKinetix = {
+export const Kinetix = {
   // --- session -------------------------------------------------------------
   me: () => api.get<{ authenticated: boolean; user: string }>('/admin/api/me'),
   login: (password: string) => api.post<{ ok: boolean; user: string }>('/admin/api/login', { password }),
@@ -479,8 +594,7 @@ export const RealKinetix = {
 
   // --- virtual keys --------------------------------------------------------
   async keys(): Promise<VirtualKey[]> {
-    const r = await api.get<{ keys: any[] }>('/admin/api/keys');
-    return r.keys.map(mapKey);
+    return (await api.collection<any>('/admin/api/keys', 'keys')).map(mapKey);
   },
   async createKey(body: CreateKeyInput): Promise<{ key: VirtualKey; fullKey: string }> {
     const r = await api.post<{ key: any; full_key: string }>('/admin/api/keys', body);
@@ -499,8 +613,7 @@ export const RealKinetix = {
 
   // --- providers -----------------------------------------------------------
   async providers(): Promise<Provider[]> {
-    const r = await api.get<{ providers: any[] }>('/admin/api/providers');
-    return r.providers.map(mapProvider);
+    return (await api.collection<any>('/admin/api/providers', 'providers')).map(mapProvider);
   },
   createProvider: (body: Record<string, unknown>) => api.post('/admin/api/providers', body),
   async getProvider(id: string): Promise<Provider> {
@@ -534,8 +647,7 @@ export const RealKinetix = {
 
   // --- models --------------------------------------------------------------
   async models(): Promise<ModelConfig[]> {
-    const r = await api.get<{ models: any[] }>('/admin/api/models');
-    return r.models.map(mapModel);
+    return (await api.collection<any>('/admin/api/models', 'models')).map(mapModel);
   },
   createModel: (providerId: string, body: Record<string, unknown>) =>
     api.post(`/admin/api/providers/${providerId}/models`, body),
@@ -567,8 +679,7 @@ export const RealKinetix = {
     );
   },
   async accounts(): Promise<Account[]> {
-    const r = await api.get<{ accounts: any[] }>('/admin/api/accounts');
-    return r.accounts.map(mapAccount);
+    return (await api.collection<any>('/admin/api/accounts', 'accounts')).map(mapAccount);
   },
   async validateAccount(body: Record<string, unknown>) {
     return api.post<{ valid: boolean; problems: string[] }>('/admin/api/validate/account', body);
@@ -593,19 +704,19 @@ export const RealKinetix = {
 
   // --- routes --------------------------------------------------------------
   async routes(): Promise<Route[]> {
-    const r = await api.get<{ routes: any[] }>('/admin/api/routes');
-    return r.routes.map(mapRoute);
+    return (await api.collection<any>('/admin/api/routes', 'routes')).map(mapRoute);
   },
-  createRoute: (body: Record<string, unknown>) => api.post('/admin/api/routes', body),
-  updateRoute: (id: string, body: Record<string, unknown>) => api.put(`/admin/api/routes/${id}`, body),
+  createRoute: (body: RouteConfigInput) => api.post('/admin/api/routes', body),
+  updateRoute: (id: string, body: RouteConfigInput) => api.put(`/admin/api/routes/${id}`, body),
+  validateRoute: (body: RouteConfigInput) =>
+    api.post<RouteValidationResult>('/admin/api/routes/validate', body),
   deleteRoute: (id: string) => api.del(`/admin/api/routes/${id}`),
-  dryRunRoute: (model: string, descriptor: Record<string, unknown>) =>
-    api.post<any>('/admin/api/routes/dry-run', { model, ...descriptor }),
+  dryRunRoute: (model: string, descriptor: DryRunDescriptor) =>
+    api.post<DryRunResult>('/admin/api/routes/dry-run', { model, ...descriptor }),
 
   // --- aliases -------------------------------------------------------------
   async aliases(): Promise<ModelAlias[]> {
-    const r = await api.get<{ aliases: any[] }>('/admin/api/aliases');
-    return r.aliases.map(mapAlias);
+    return (await api.collection<any>('/admin/api/aliases', 'aliases')).map(mapAlias);
   },
   createAlias: (body: Record<string, unknown>) => api.post('/admin/api/aliases', body),
   deleteAlias: (id: string) => api.del(`/admin/api/aliases/${id}`),
@@ -736,13 +847,3 @@ export const RealKinetix = {
     return r.audit.map(mapAudit);
   },
 };
-
-
-import { DemoKinetix } from './demoResources';
-
-export const DEMO_MODE =
-  import.meta.env.VITE_KINETIX_DEMO !== 'false' &&
-  import.meta.env.VITE_KINETIX_DEMO !== '0';
-
-export const Kinetix: typeof RealKinetix =
-  DEMO_MODE ? (DemoKinetix as typeof RealKinetix) : RealKinetix;

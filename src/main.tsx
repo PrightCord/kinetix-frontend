@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.tsx';
+import './demo/bootstrap';
+import { Workbench } from './lab/Workbench';
 import './index.css';
 import { applyStoredThemeEarly } from './lib/theme';
 
@@ -9,6 +10,6 @@ applyStoredThemeEarly();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Workbench />
   </StrictMode>,
 );

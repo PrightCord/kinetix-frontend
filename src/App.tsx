@@ -18,12 +18,18 @@ import { AccountsView } from './components/views/AccountsView';
 import { UsageView } from './components/views/UsageView';
 import { RequestsView } from './components/views/RequestsView';
 import { HealthView } from './components/views/HealthView';
-import { OverviewView } from './components/views/OverviewView';
 import { LiveRequest } from './types';
 import { AliasesView } from './components/views/AliasesView';
 import { AuditView } from './components/views/AuditView';
+import { SquiggleDivider } from './components/HandDrawnElements';
 import { EMPTY_METRICS } from './lib/mappers';
-import { Kinetix, ExportFile, UsageDay } from './lib/resources';
+import {
+  Kinetix,
+  ExportFile,
+  UsageDay,
+  RouteConfigInput,
+  RouteValidationResult,
+} from './lib/resources';
 import { SettingsView } from './components/views/SettingsView';
 import { PluginsView } from './components/views/PluginsView';
 import { ApiError } from './lib/api';
@@ -40,8 +46,55 @@ import {
   ProxyMetrics,
 } from './types';
 import { AlertTriangle } from 'lucide-react';
+import { OperationsOverviewView } from './components/operations/OperationsOverviewView';
+import { LiveTrafficView } from './components/operations/LiveTrafficView';
+import { RequestTraceModal } from './components/operations/RequestTraceModal';
+import { WhyThisTargetModal } from './components/operations/WhyThisTargetModal';
+import { DebugModeModal } from './components/operations/DebugModeModal';
+import { RoutePlaygroundView } from './components/operations/RoutePlaygroundView';
+import { FailureExplorerView } from './components/operations/FailureExplorerView';
+import { AccountHealthView } from './components/operations/AccountHealthView';
+import { ReasoningInspectorView } from './components/operations/ReasoningInspectorView';
+import { CapabilityMatrixView } from './components/operations/CapabilityMatrixView';
+import { TopologyView } from './components/operations/TopologyView';
+import { CacheAffinityView } from './components/operations/CacheAffinityView';
+import { FallbackVisualizerView } from './components/operations/FallbackVisualizerView';
+import { CostExplorerView } from './components/operations/CostExplorerView';
+import { IncidentTimelineView } from './components/operations/IncidentTimelineView';
+import { ConfigHistoryView } from './components/operations/ConfigHistoryView';
+import { INITIAL_REQUEST_TRACES, OperationalRequestTrace } from './demo/operationalData';
 
 type AuthState = 'checking' | 'signed-out' | 'signed-in';
+
+function routeConfigInput(route: Route, routeId?: string): RouteConfigInput {
+  return {
+    route_id: routeId,
+    name: route.name,
+    description: route.description,
+    strategy: route.selectionStrategy,
+    fallback_triggers: route.fallbackTriggers,
+    portability_policy: route.portabilityPolicy,
+    cache_affinity: route.cacheAffinity,
+    sticky_routing: route.stickyRouting,
+    max_attempts: route.maxAttempts,
+    max_concurrent_requests: route.maxConcurrentRequests,
+    targets: route.targets.map((target) => ({
+      account_id: target.accountId || null,
+      model_id: target.modelId,
+      priority: target.priority,
+      weight: target.weight ?? 1,
+      predicate: target.predicate ?? null,
+      param_overrides: target.paramOverrides ?? null,
+    })),
+  };
+}
+
+function routeValidationMessage(validation: RouteValidationResult): string {
+  return validation.issues
+    .filter((issue) => issue.severity === 'error')
+    .map((issue) => `${issue.code}: ${issue.message}`)
+    .join('; ');
+}
 
 function getTabFromPath(path: string): NavTab {
   const normalized = path.replace(/\/$/, '');
@@ -63,6 +116,17 @@ export default function App() {
   const [isTesterOpen, setIsTesterOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const { mode: themeMode, setTheme } = useTheme();
+
+  // Operational trace & debug modals state
+  const [selectedTrace, setSelectedTrace] = useState<OperationalRequestTrace | null>(INITIAL_REQUEST_TRACES[0]);
+  const [isTraceOpen, setIsTraceOpen] = useState(false);
+  const [whyModal, setWhyModal] = useState<{ isOpen: boolean; routeName: string; targetName: string }>({
+    isOpen: false,
+    routeName: 'sonnet',
+    targetName: 'claude-oauth-2',
+  });
+  const [isDebugOpen, setIsDebugOpen] = useState(false);
+  const [debugActiveUntil, setDebugActiveUntil] = useState<number | null>(null);
 
   // Reactive data, all sourced from the admin API.
   const [keys, setKeys] = useState<VirtualKey[]>([]);
@@ -230,6 +294,7 @@ export default function App() {
         allowed_models: newKey.allowedModels,
         rpm_limit: newKey.rpmLimit || null,
         tpm_limit: newKey.tpmLimit || null,
+        max_concurrent_requests: newKey.maxConcurrentRequests,
         daily_budget: newKey.dailyBudget || null,
         monthly_budget: newKey.monthlyBudget || null,
       });
@@ -249,43 +314,28 @@ export default function App() {
 
   const handleDeleteKey = (id: string) => withRefresh(() => Kinetix.deleteKey(id));
 
-  const handleAddRoute = (newRoute: Route) =>
-    withRefresh(() =>
-      Kinetix.createRoute({
-        name: newRoute.name,
-        description: newRoute.description,
-        strategy: newRoute.selectionStrategy,
-        fallback_triggers: newRoute.fallbackTriggers,
-        portability_policy: newRoute.portabilityPolicy,
-        cache_affinity: newRoute.cacheAffinity,
-        sticky_routing: newRoute.stickyRouting,
-        targets: newRoute.targets.map((t) => ({
-          account_id: t.accountId || null,
-          model_id: t.modelId,
-          priority: t.priority,
-          weight: t.weight ?? 1,
-        })),
-      }),
-    );
+  const handleAddRoute = async (newRoute: Route) => {
+    const body = routeConfigInput(newRoute);
+    const validation = await Kinetix.validateRoute(body);
+    if (!validation.valid) {
+      throw new Error(`Route validation failed: ${routeValidationMessage(validation)}`);
+    }
+    await Kinetix.createRoute(body);
+    await refresh();
+  };
 
   const handleUpdateRoute = (updated: Route) =>
-    withRefresh(() =>
-      Kinetix.updateRoute(updated.id, {
-        name: updated.name,
-        description: updated.description,
-        strategy: updated.selectionStrategy,
-        fallback_triggers: updated.fallbackTriggers,
-        portability_policy: updated.portabilityPolicy,
-        cache_affinity: updated.cacheAffinity,
-        sticky_routing: updated.stickyRouting,
-        targets: updated.targets.map((t) => ({
-          account_id: t.accountId || null,
-          model_id: t.modelId,
-          priority: t.priority,
-          weight: t.weight ?? 1,
-        })),
-      }),
-    );
+    withRefresh(async () => {
+      const body = routeConfigInput(updated, updated.id);
+      const validation = await Kinetix.validateRoute(body);
+      if (!validation.valid) {
+        throw new Error(`Route validation failed: ${routeValidationMessage(validation)}`);
+      }
+      return Kinetix.updateRoute(updated.id, body);
+    });
+
+  const handleValidateRoute = (route: Route): Promise<RouteValidationResult> =>
+    Kinetix.validateRoute(routeConfigInput(route, route.id));
 
   const handleDeleteRoute = (routeId: string) => withRefresh(() => Kinetix.deleteRoute(routeId));
 
@@ -340,8 +390,8 @@ export default function App() {
   const handleDeleteProvider = (providerId: string) =>
     withRefresh(() => Kinetix.deleteProvider(providerId));
 
-  const modelCapabilitiesPayload = (model: ModelConfig): Record<string, boolean> => {
-    const out: Record<string, boolean> = {};
+  const modelCapabilitiesPayload = (model: ModelConfig): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
     const fields: [string, boolean | undefined][] = [
       ['text', model.capabilities.text],
       ['vision', model.capabilities.vision],
@@ -353,6 +403,8 @@ export default function App() {
     for (const [key, value] of fields) {
       if (typeof value === 'boolean') out[key] = value;
     }
+    const families = model.capabilities.continuationFamilies ?? [];
+    if (families.length > 0) out.continuation_families = families;
     return out;
   };
 
@@ -426,7 +478,7 @@ export default function App() {
       }),
     );
 
-  const handleUpdateAccount = (acc: Account) =>
+  const handleUpdateAccount = (acc: Account, status?: Account['status']) =>
     withRefresh(() =>
       Kinetix.updateAccount(acc.id, {
         provider_id: acc.providerId,
@@ -435,7 +487,7 @@ export default function App() {
         weight: acc.weight,
         soft_quota_usd: acc.softQuotaSpendLimit ?? null,
         quota_type: acc.quotaType,
-        status: acc.status,
+        ...(status ? { status } : {}),
       }),
     );
 
@@ -485,14 +537,14 @@ export default function App() {
         <TopBar
           activeTab={activeTab}
           metrics={metrics}
-          accounts={accounts}
-          requests={requests}
           onOpenTester={() => setIsTesterOpen(true)}
           onOpenNav={() => setNavOpen(true)}
           onRefresh={refresh}
           isRefreshing={isRefreshing}
           themeMode={themeMode}
           onThemeChange={setTheme}
+          onOpenDebugMode={() => setIsDebugOpen(true)}
+          isDebugActive={Boolean(debugActiveUntil && debugActiveUntil > Date.now())}
         />
 
         <main className="flex-1 w-full p-4 md:p-8">
@@ -506,19 +558,109 @@ export default function App() {
           </div>
         )}
 
+        {/* OPERATIONS CONSOLE VIEW (OVERVIEW) */}
         {activeTab === 'overview' && (
-          <OverviewView
+          <OperationsOverviewView
             metrics={metrics}
             routes={routes}
-            providers={providers}
             accounts={accounts}
-            keys={keys}
+            providers={providers}
+            onNavigateTab={handleSelectTab}
+            onOpenPlayground={() => handleSelectTab('playground')}
+            onOpenDebugMode={() => setIsDebugOpen(true)}
+          />
+        )}
+
+        {/* LIVE TRAFFIC FLOW */}
+        {activeTab === 'traffic' && (
+          <LiveTrafficView
             requests={requests}
             liveRequests={liveRequests}
-            onOpenTester={() => setIsTesterOpen(true)}
+            onInspectTrace={(t) => {
+              setSelectedTrace(t);
+              setIsTraceOpen(true);
+            }}
+            onExplainTarget={(r, tgt) =>
+              setWhyModal({ isOpen: true, routeName: r, targetName: tgt })
+            }
+          />
+        )}
+
+        {/* REQUEST TRACES */}
+        {activeTab === 'traces' && (
+          <div className="space-y-4">
+            <LiveTrafficView
+              requests={requests}
+              liveRequests={liveRequests}
+              onInspectTrace={(t) => {
+                setSelectedTrace(t);
+                setIsTraceOpen(true);
+              }}
+              onExplainTarget={(r, tgt) =>
+                setWhyModal({ isOpen: true, routeName: r, targetName: tgt })
+              }
+            />
+          </div>
+        )}
+
+        {/* FAILURE EXPLORER */}
+        {activeTab === 'failures' && (
+          <FailureExplorerView
+            onInspectTrace={(reqId) => {
+              setSelectedTrace(INITIAL_REQUEST_TRACES[0]);
+              setIsTraceOpen(true);
+            }}
             onNavigateTab={handleSelectTab}
           />
         )}
+
+        {/* ROUTE PLAYGROUND (DRY-RUN DEBUGGER) */}
+        {activeTab === 'playground' && (
+          <RoutePlaygroundView
+            routes={routes}
+            keys={keys}
+            onExplainTarget={(r, tgt) =>
+              setWhyModal({ isOpen: true, routeName: r, targetName: tgt })
+            }
+          />
+        )}
+
+        {/* STICKY & CACHE AFFINITY */}
+        {activeTab === 'affinity' && <CacheAffinityView />}
+
+        {/* CREDENTIAL & ACCOUNT TOPOLOGY */}
+        {activeTab === 'topology' && (
+          <TopologyView
+            routes={routes}
+            accounts={accounts}
+            providers={providers}
+            keys={keys}
+          />
+        )}
+
+        {/* PROVIDER CAPABILITY MATRIX */}
+        {activeTab === 'matrix' && <CapabilityMatrixView />}
+
+        {/* REASONING & THINKING NORMALIZATION */}
+        {activeTab === 'reasoning' && <ReasoningInspectorView />}
+
+        {/* ACCOUNT HEALTH & COOLDOWNS */}
+        {activeTab === 'account-health' && <AccountHealthView onRefresh={refresh} />}
+
+        {/* COST EXPLORER & SPEND */}
+        {activeTab === 'costs' && (
+          <CostExplorerView
+            requests={requests}
+            keys={keys}
+            routes={routes}
+          />
+        )}
+
+        {/* INCIDENT TIMELINE */}
+        {activeTab === 'incidents' && <IncidentTimelineView />}
+
+        {/* CONFIG HISTORY & ROLLBACK */}
+        {activeTab === 'history' && <ConfigHistoryView />}
 
         {activeTab === 'keys' && (
           <KeysView
@@ -538,6 +680,7 @@ export default function App() {
             allowedProviders={keys[0]?.allowedProviders ?? []}
             onAddRoute={handleAddRoute}
             onUpdateRoute={handleUpdateRoute}
+            onValidateRoute={handleValidateRoute}
             onDeleteRoute={handleDeleteRoute}
           />
         )}
@@ -606,15 +749,21 @@ export default function App() {
         {activeTab === 'settings' && <SettingsView onLogout={handleLogout} />}
         </main>
 
-        <footer className="w-full py-4 px-6 border-t border-[var(--border)] text-xs text-[var(--text-muted)] flex flex-wrap items-center justify-between gap-3 font-mono">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-[var(--text-secondary)]">KINETIX CONTROL PLANE</span>
+        <div className="w-full px-4 md:px-8">
+          <SquiggleDivider />
+        </div>
+
+        <footer className="w-full py-6 px-4 text-center font-body text-sm text-[var(--ink)]/70">
+          <p className="flex items-center justify-center gap-2 flex-wrap">
+            <strong className="font-heading text-base text-[var(--ink)]">Kinetix</strong>
             <span>•</span>
-            <span>Zero-Downtime Multi-Protocol Routing</span>
-          </div>
-          <div className="text-[11px] text-[var(--text-muted)]">
-            OpenAI &amp; Anthropic Ingress • Universal Upstream Adaptation • SQLite WAL at rest
-          </div>
+            <span>Zero-downtime LLM Multi-Protocol Proxy</span>
+            <span>•</span>
+            <span className="underline decoration-wavy decoration-[var(--marker-red)]">Hand-Drawn Design System</span>
+          </p>
+          <p className="text-xs text-[var(--ink)]/50 font-mono mt-1">
+            OpenAI &amp; Anthropic streaming in • Gemini, OpenAI, &amp; Anthropic upstream out • SQLite WAL at rest
+          </p>
         </footer>
       </div>
 
@@ -627,6 +776,33 @@ export default function App() {
         keys={keys}
         routes={routes}
         models={models}
+      />
+
+      <RequestTraceModal
+        trace={selectedTrace}
+        isOpen={isTraceOpen}
+        onClose={() => setIsTraceOpen(false)}
+        onExplainTarget={(r, tgt) =>
+          setWhyModal({ isOpen: true, routeName: r, targetName: tgt })
+        }
+      />
+
+      <WhyThisTargetModal
+        isOpen={whyModal.isOpen}
+        routeName={whyModal.routeName}
+        targetName={whyModal.targetName}
+        onClose={() => setWhyModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      <DebugModeModal
+        isOpen={isDebugOpen}
+        activeUntil={debugActiveUntil}
+        onClose={() => setIsDebugOpen(false)}
+        onActivate={(mins) => {
+          setDebugActiveUntil(Date.now() + mins * 60 * 1000);
+          setIsDebugOpen(false);
+        }}
+        onDeactivate={() => setDebugActiveUntil(null)}
       />
     </div>
   );

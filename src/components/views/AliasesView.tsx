@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Compass, Plus, ArrowRight, Trash2, Search, X } from 'lucide-react';
+import { Compass, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import { ModelAlias, Route, ModelConfig } from '../../types';
-import { Card, Button, StatusBadge, Input, Select } from '../KinetixUI';
+import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
+import { DESIGN_TOKENS } from '../../lib/designSystem';
 import { useConfirm } from '../../lib/useConfirm';
 
 interface AliasesViewProps {
@@ -25,7 +26,6 @@ export const AliasesView: React.FC<AliasesViewProps> = ({
   const [targetType, setTargetType] = useState<'route' | 'model'>('route');
   const [targetId, setTargetId] = useState(routes[0]?.id || '');
   const [description, setDescription] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,208 +55,195 @@ export const AliasesView: React.FC<AliasesViewProps> = ({
     setDescription('');
   };
 
-  const filtered = aliases.filter((a) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      a.aliasName.toLowerCase().includes(q) ||
-      a.targetDisplayName.toLowerCase().includes(q) ||
-      a.description.toLowerCase().includes(q)
-    );
-  });
-
   return (
     <div className="space-y-6">
       {confirmNode}
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Model Aliasing &amp; Name Translation
+          <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+            <span>Model Aliasing & Routing Table</span>
+            <SketchBadge variant="yellow" rotation="-1deg">
+              FR-5 Spec
+            </SketchBadge>
           </h2>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Expose stable virtual model identifiers (e.g. <code>coder</code>, <code>fast</code>) mapped to routes or providers.
+          <p className="text-base font-body text-[var(--ink)]/80">
+            Expose clean, stable model names (like <code>coder</code> or <code>fast</code>) to tools like Pi, routing them to routes or specific upstream models.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search aliases…"
-            icon={<Search className="w-3.5 h-3.5" />}
-            className="w-full sm:w-56"
-            mono
-          />
-
-          <Button variant="primary" size="sm" onClick={() => setShowAddModal(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            Create Alias
-          </Button>
-        </div>
+        <SketchButton
+          variant="primary"
+          size="md"
+          onClick={() => setShowAddModal(true)}
+          className="gap-2 font-heading font-bold"
+        >
+          <Plus className="w-5 h-5" />
+          Add Model Alias
+        </SketchButton>
       </div>
 
-      <Card className="p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="kinetix-table font-mono text-xs">
-            <thead>
-              <tr>
-                <th>Virtual Alias</th>
-                <th>Target Type</th>
-                <th>Resolved Target</th>
-                <th>Description</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-subtle)]">
-              {filtered.map((alias) => (
-                <tr key={alias.id} className="hover:bg-[var(--surface-raised)]">
-                  <td className="font-bold text-[var(--primary)]">{alias.aliasName}</td>
-                  <td>
-                    <StatusBadge variant={alias.targetType === 'route' ? 'info' : 'neutral'} size="sm">
-                      {alias.targetType.toUpperCase()}
-                    </StatusBadge>
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-                      <ArrowRight className="w-3 h-3 text-[var(--text-muted)]" />
-                      <span>{alias.targetDisplayName}</span>
-                    </div>
-                  </td>
-                  <td className="font-sans text-[var(--text-secondary)] text-xs">
-                    {alias.description}
-                  </td>
-                  <td className="text-right font-sans">
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={async () => {
-                        const ok = await confirm({
-                          title: `Delete alias ${alias.aliasName}?`,
-                          message: 'Requests specifying this alias will no longer resolve.',
-                          danger: true,
-                          confirmLabel: 'Delete',
-                        });
-                        if (ok) onDeleteAlias(alias.id);
-                      }}
-                      className="text-[var(--danger)]"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center py-6 text-[var(--text-muted)] font-sans">
-                    No model aliases configured.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {aliases.map((alias, idx) => {
+          const rotation = idx % 2 === 0 ? '-0.5deg' : '0.5deg';
 
-      {/* Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] max-w-md w-full p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Create Model Alias</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-3 text-xs">
+          return (
+            <WobblyCard
+              key={alias.id}
+              decoration={idx % 2 === 0 ? 'tape' : 'tack-blue'}
+              rotation={rotation}
+              className="p-5 flex flex-col justify-between"
+            >
               <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Alias Name</label>
-                <Input
-                  value={aliasName}
-                  onChange={(e) => setAliasName(e.target.value)}
-                  placeholder="e.g. coder, fast, sonnet"
-                  required
-                  mono
-                />
-              </div>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <span className="text-xs font-mono text-[var(--ink)]/60 block mb-1">
+                      Client-Facing Model Name:
+                    </span>
+                    <h3 className="text-2xl font-heading font-bold text-[var(--ink)]">
+                      "{alias.aliasName}"
+                    </h3>
+                  </div>
 
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Target Classification</label>
-                <div className="grid grid-cols-2 gap-2 font-mono text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTargetType('route');
-                      setTargetId(routes[0]?.id || '');
-                    }}
-                    className={`py-1.5 px-2 rounded-[4px] border cursor-pointer text-center ${
-                      targetType === 'route'
-                        ? 'bg-[var(--surface-raised)] border-[var(--primary)] text-[var(--primary)] font-semibold'
-                        : 'border-[var(--border)] text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    Route (Multi-Target)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTargetType('model');
-                      setTargetId(models[0]?.id || '');
-                    }}
-                    className={`py-1.5 px-2 rounded-[4px] border cursor-pointer text-center ${
-                      targetType === 'model'
-                        ? 'bg-[var(--surface-raised)] border-[var(--primary)] text-[var(--primary)] font-semibold'
-                        : 'border-[var(--border)] text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    Direct Model
-                  </button>
+                  <SketchBadge variant={alias.targetType === 'route' ? 'yellow' : 'blue'}>
+                    {alias.targetType === 'route' ? '⚡ Route' : 'Direct Model'}
+                  </SketchBadge>
                 </div>
+
+                <div className="p-3 bg-[var(--paper)] border-2 border-[var(--ink)] sketch-shadow-sm rounded mb-3 flex items-center gap-2 text-sm font-mono">
+                  <span className="font-bold text-[var(--pen-blue)]">{alias.aliasName}</span>
+                  <ArrowRight className="w-4 h-4 text-[var(--ink)]" />
+                  <span className="font-bold text-[var(--ink)]">{alias.targetDisplayName}</span>
+                </div>
+
+                <p className="text-sm font-body text-[var(--ink)]/80">
+                  {alias.description}
+                </p>
               </div>
 
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Destination Target</label>
-                <Select
-                  value={targetId}
-                  onChange={(e) => setTargetId(e.target.value)}
-                  className="w-full"
-                  mono
+              <div className="pt-3 border-t border-[var(--ink)]/20 flex justify-end mt-4">
+                <button
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `Remove alias "${alias.aliasName}"?`,
+                      message: `Clients calling the model name "${alias.aliasName}" will stop resolving. This does not affect the underlying model or route.`,
+                      confirmLabel: 'Remove Alias',
+                      danger: true,
+                    });
+                    if (ok) onDeleteAlias(alias.id);
+                  }}
+                  className="text-xs font-mono text-[var(--marker-red)] hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  {targetType === 'route' ? (
-                    routes.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        Route: {c.name} ({c.targets.length} targets)
-                      </option>
-                    ))
-                  ) : (
-                    models.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.displayName} ({m.providerName})
-                      </option>
-                    ))
-                  )}
-                </Select>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Remove Alias
+                </button>
               </div>
+            </WobblyCard>
+          );
+        })}
+      </div>
 
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Description</label>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Mapping description"
-                />
-              </div>
+      {/* Add Alias Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg">
+            <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="absolute top-4 right-4 text-[var(--ink)] font-bold text-xl hover:text-[var(--marker-red)] cursor-pointer"
+              >
+                ✕
+              </button>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
-                <Button size="sm" variant="ghost" type="button" onClick={() => setShowAddModal(false)}>
-                  Cancel
-                </Button>
-                <Button size="sm" variant="primary" type="submit">
-                  Save Alias
-                </Button>
-              </div>
-            </form>
+              <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+                <Compass className="w-6 h-6 text-[var(--pen-blue)]" />
+                Add Model Alias
+              </h3>
+
+              <form onSubmit={handleCreateSubmit} className="space-y-4 font-body">
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Client Alias Name (e.g. coder, fast, sonnet)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. coder"
+                    value={aliasName}
+                    onChange={(e) => setAliasName(e.target.value)}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-mono sketch-shadow-sm focus:outline-none"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                      Target Type
+                    </label>
+                    <select
+                      value={targetType}
+                      onChange={(e) => setTargetType(e.target.value as any)}
+                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none"
+                      style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
+                    >
+                      <option value="route">Route (With Fallback)</option>
+                      <option value="model">Direct Model</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                      Target Destination
+                    </label>
+                    <select
+                      value={targetId}
+                      onChange={(e) => setTargetId(e.target.value)}
+                      className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none"
+                      style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
+                    >
+                      {targetType === 'route'
+                        ? routes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              ⚡ {c.name}
+                            </option>
+                          ))
+                        : models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.displayName}
+                            </option>
+                          ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Description / Purpose
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Primary Pi coding target"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base font-body sketch-shadow-sm focus:outline-none"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyBtn }}
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end gap-3">
+                  <SketchButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowAddModal(false)}
+                  >
+                    Cancel
+                  </SketchButton>
+                  <SketchButton type="submit" variant="danger" className="font-bold">
+                    Save Alias
+                  </SketchButton>
+                </div>
+              </form>
+            </WobblyCard>
           </div>
         </div>
       )}

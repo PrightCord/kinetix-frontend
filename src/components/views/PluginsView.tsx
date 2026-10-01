@@ -27,7 +27,7 @@ import {
   PluginSummary,
 } from '../../lib/resources';
 import { Provider } from '../../types';
-import { Card, Button, StatusBadge } from '../KinetixUI';
+import { SketchBadge, SketchButton, WobblyCard } from '../HandDrawnElements';
 import { useAuthEnrollment } from '../CredentialAuthFlow';
 
 function fileAsBase64(file: File): Promise<string> {
@@ -540,7 +540,7 @@ export const PluginsView: React.FC = () => {
           <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2 flex-wrap">
             <Box className="w-7 h-7 text-[var(--pen-blue)]" />
             <span>Plugins &amp; Integrations</span>
-            <StatusBadge variant="info">WASM</StatusBadge>
+            <SketchBadge variant="blue" rotation="1deg">WASM</SketchBadge>
           </h2>
           <p className="text-base font-body text-[var(--ink)]/80 max-w-3xl">
             Install sandboxed <span className="font-mono">.kxp</span> packages, review their requested
@@ -548,7 +548,7 @@ export const PluginsView: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button
+          <SketchButton
             variant="secondary"
             onClick={() => void refresh(selectedId)}
             disabled={loading || busy !== null}
@@ -556,15 +556,15 @@ export const PluginsView: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-          <Button
+          </SketchButton>
+          <SketchButton
             variant="primary"
             onClick={() => setShowInstall((value) => !value)}
             className="gap-2"
           >
             <PackagePlus className="w-4 h-4" />
             Install .kxp
-          </Button>
+          </SketchButton>
         </div>
       </div>
 
@@ -585,7 +585,7 @@ export const PluginsView: React.FC = () => {
 
 
       {showInstall && (
-        <Card className="p-5">
+        <WobblyCard decoration="tape" className="p-5">
           <form onSubmit={install} className="space-y-4">
             <div>
               <h3 className="text-xl font-heading font-bold flex items-center gap-2">
@@ -682,7 +682,7 @@ export const PluginsView: React.FC = () => {
             </label>
 
             <div className="flex gap-2">
-              <Button
+              <SketchButton
                 type="submit"
                 variant="primary"
                 disabled={busy === 'install' || (installTab === 'upload' ? !packageFile : !installUrl.trim())}
@@ -690,17 +690,17 @@ export const PluginsView: React.FC = () => {
               >
                 <Upload className="w-4 h-4" />
                 {busy === 'install' ? 'Installing…' : 'Install package'}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setShowInstall(false)}>
+              </SketchButton>
+              <SketchButton type="button" variant="secondary" onClick={() => setShowInstall(false)}>
                 Cancel
-              </Button>
+              </SketchButton>
             </div>
           </form>
-        </Card>
+        </WobblyCard>
       )}
 
       {catalog.length > 0 && (
-        <Card variant="raised" className="p-5">
+        <WobblyCard variant="muted" className="p-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="text-xl font-heading font-bold">Discover Marketplace</h3>
@@ -710,7 +710,7 @@ export const PluginsView: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
+              <SketchButton
                 variant="secondary"
                 className="gap-2 text-xs py-1.5 px-3"
                 disabled={refreshingCatalog || busy !== null}
@@ -718,8 +718,8 @@ export const PluginsView: React.FC = () => {
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refreshingCatalog ? 'animate-spin' : ''}`} />
                 {refreshingCatalog ? 'Refreshing…' : 'Refresh Marketplace'}
-              </Button>
-              <StatusBadge variant="info">Official catalog</StatusBadge>
+              </SketchButton>
+              <SketchBadge variant="blue">Official catalog</SketchBadge>
             </div>
           </div>
 
@@ -773,9 +773,10 @@ export const PluginsView: React.FC = () => {
                 return (
                   <div
                     key={entry.id}
-                    className={`p-4 border rounded-[6px] ${
-                      hasUpdate ? 'border-amber-500/40 bg-amber-500/5' : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)] transition-colors'
+                    className={`p-4 border-2 ${
+                      hasUpdate ? 'border-amber-400 bg-amber-50/20' : 'border-[var(--ink)]/25 bg-[var(--surface)]'
                     }`}
+                    style={{ borderRadius: '12px 9px 14px 10px / 9px 14px 9px 12px' }}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -789,9 +790,9 @@ export const PluginsView: React.FC = () => {
                         </div>
                         <div className="text-xs font-mono text-[var(--ink)]/55">{entry.publisher}</div>
                       </div>
-                      <StatusBadge variant={installed ? (hasUpdate ? 'yellow' : 'green') : 'default'}>
+                      <SketchBadge variant={installed ? (hasUpdate ? 'yellow' : 'green') : 'default'}>
                         {installed ? `Installed v${installed.version}` : `v${entry.latest_version}`}
-                      </StatusBadge>
+                      </SketchBadge>
                     </div>
 
                     <p className="mt-2 text-sm font-body text-[var(--ink)]/75">{entry.description}</p>
@@ -810,9 +811,9 @@ export const PluginsView: React.FC = () => {
                         Artifact: {entry.artifact_name}
                       </div>
                       {installed && !hasUpdate ? (
-                        <StatusBadge variant="healthy">Current (v{installed.version})</StatusBadge>
+                        <SketchBadge variant="green">Current (v{installed.version})</SketchBadge>
                       ) : entry.install_ready ? (
-                        <Button
+                        <SketchButton
                           variant="primary"
                           className="gap-2"
                           disabled={busy !== null}
@@ -824,13 +825,13 @@ export const PluginsView: React.FC = () => {
                             : hasUpdate
                               ? `Review update to v${entry.latest_version}`
                               : 'Review install'}
-                        </Button>
+                        </SketchButton>
                       ) : (
-                        <StatusBadge variant="warning">
+                        <SketchBadge variant="yellow">
                           {entry.trust_status === 'unavailable'
                             ? 'Trust unavailable'
                             : 'Discovery only'}
-                        </StatusBadge>
+                        </SketchBadge>
                       )}
                     </div>
                   </div>
@@ -838,11 +839,11 @@ export const PluginsView: React.FC = () => {
               })}
             </div>
           )}
-        </Card>
+        </WobblyCard>
       )}
 
       {catalogPreview && (
-        <Card className="p-5">
+        <WobblyCard decoration="tape" className="p-5">
           <div className="flex flex-col md:flex-row md:items-start gap-4">
             <div className="flex-1">
               <h3 className="text-xl font-heading font-bold">
@@ -856,7 +857,7 @@ export const PluginsView: React.FC = () => {
                 Confirmation repeats those checks before installation.
               </p>
             </div>
-            <StatusBadge variant="healthy">Signature verified</StatusBadge>
+            <SketchBadge variant="green">Signature verified</SketchBadge>
           </div>
 
           <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -914,7 +915,7 @@ export const PluginsView: React.FC = () => {
           </div>
 
           <div className="mt-4 flex gap-2 flex-wrap items-center">
-            <Button
+            <SketchButton
               variant="primary"
               disabled={busy !== null}
               onClick={() => void confirmCatalogInstall(true)}
@@ -925,59 +926,60 @@ export const PluginsView: React.FC = () => {
                 : catalogPreview.current_version
                   ? `Update & Enable (v${catalogPreview.target_version})`
                   : `Install & Enable (v${catalogPreview.target_version})`}
-            </Button>
-            <Button
+            </SketchButton>
+            <SketchButton
               variant="secondary"
               disabled={busy !== null}
               onClick={() => void confirmCatalogInstall(false)}
             >
               <PackagePlus className="w-4 h-4" />
               Install Disabled (Review Later)
-            </Button>
-            <Button
+            </SketchButton>
+            <SketchButton
               variant="secondary"
               disabled={busy !== null}
               onClick={() => setCatalogPreview(null)}
             >
               Cancel
-            </Button>
+            </SketchButton>
           </div>
-        </Card>
+        </WobblyCard>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,2fr)] gap-6">
         <div className="space-y-3">
           {loading && plugins.length === 0 && (
-            <Card variant="raised" className="p-5 text-sm font-mono">
+            <WobblyCard variant="muted" className="p-5 text-sm font-mono">
               Loading plugins…
-            </Card>
+            </WobblyCard>
           )}
           {!loading && plugins.length === 0 && (
-            <Card variant="raised" className="p-5">
+            <WobblyCard variant="muted" className="p-5">
               <h3 className="font-heading font-bold text-lg mb-1">No plugins installed</h3>
               <p className="text-sm font-body text-[var(--ink)]/75">
                 Upload a <span className="font-mono">.kxp</span> package to start extending Kinetix.
               </p>
-            </Card>
+            </WobblyCard>
           )}
           {plugins.map((plugin) => (
             <button
               key={plugin.id}
               type="button"
               onClick={() => void selectPlugin(plugin.id)}
-              className={`w-full text-left p-4 border rounded-[6px] cursor-pointer transition-all ${selectedId === plugin.id
-                ? 'bg-[var(--surface-raised)] border-[var(--primary)] shadow-xs'
-                : 'bg-transparent border-[var(--border)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]'
+              className={`w-full text-left p-4 border-2 cursor-pointer transition-all ${selectedId === plugin.id
+                ? 'bg-[var(--surface)] border-[var(--ink)] sketch-shadow-sm -translate-y-0.5'
+                : 'bg-transparent border-[var(--ink)]/25 hover:border-[var(--ink)]/60 hover:bg-[var(--erased)]/40'
               }`}
+              style={{ borderRadius: '14px 10px 16px 10px / 10px 16px 10px 14px' }}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-heading font-bold truncate">{plugin.name || plugin.id}</div>
                   <div className="font-mono text-[0.72rem] text-[var(--ink)]/55 truncate">{plugin.id}</div>
                 </div>
-                <StatusBadge variant={plugin.status === 'enabled' ? 'green' : 'yellow'}>
+                <SketchBadge variant={plugin.status === 'enabled' ? 'green' : 'yellow'} rotation="1deg">
                   {plugin.status}
-                </StatusBadge>
+                </SketchBadge>
               </div>
               <div className="mt-2 text-xs font-mono text-[var(--ink)]/70">
                 v{plugin.version} · API {plugin.plugin_api_major}
@@ -989,17 +991,17 @@ export const PluginsView: React.FC = () => {
         <div>
           {selected ? (
             <div className="space-y-5">
-              <Card className="p-5">
+              <WobblyCard decoration="tack" className="p-5">
                 <div className="flex flex-col md:flex-row md:items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-2xl font-heading font-bold">{selected.name || selected.id}</h3>
-                      <StatusBadge variant={selected.status === 'enabled' ? 'green' : 'yellow'}>
+                      <SketchBadge variant={selected.status === 'enabled' ? 'green' : 'yellow'}>
                         {selected.status}
-                      </StatusBadge>
-                      <StatusBadge variant={selected.signature === 'verified' ? 'green' : 'yellow'}>
+                      </SketchBadge>
+                      <SketchBadge variant={selected.signature === 'verified' ? 'green' : 'yellow'}>
                         {selected.signature}
-                      </StatusBadge>
+                      </SketchBadge>
                     </div>
                     <div className="font-mono text-xs text-[var(--ink)]/60 mt-1 break-all">{selected.id}</div>
                     <div className="font-mono text-xs text-[var(--ink)]/60 mt-1 break-all">
@@ -1007,7 +1009,7 @@ export const PluginsView: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    <Button
+                    <SketchButton
                       variant="secondary"
                       disabled={busy !== null}
                       onClick={() =>
@@ -1019,9 +1021,9 @@ export const PluginsView: React.FC = () => {
                       }
                     >
                       Validate
-                    </Button>
+                    </SketchButton>
                     {selected.status === 'enabled' ? (
-                      <Button
+                      <SketchButton
                         variant="secondary"
                         disabled={busy !== null}
                         onClick={() =>
@@ -1034,9 +1036,9 @@ export const PluginsView: React.FC = () => {
                         className="gap-2"
                       >
                         <PowerOff className="w-4 h-4" /> Disable
-                      </Button>
+                      </SketchButton>
                     ) : (
-                      <Button
+                      <SketchButton
                         variant="primary"
                         disabled={busy !== null || !fullyApproved}
                         onClick={() =>
@@ -1049,27 +1051,28 @@ export const PluginsView: React.FC = () => {
                         className="gap-2"
                       >
                         <Power className="w-4 h-4" /> Enable
-                      </Button>
+                      </SketchButton>
                     )}
                   </div>
                 </div>
-              </Card>
+              </WobblyCard>
 
               {selected.integrations.length > 0 && (
-                <Card className="p-5">
+                <WobblyCard decoration="tape" className="p-5">
                   <h4 className="text-lg font-heading font-bold mb-3">Integrations</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selected.integrations.map((integration) => (
                       <div
                         key={integration.id}
-                        className="p-4 border border-[var(--border)] bg-[var(--surface-raised)] rounded-[6px]"
+                        className="p-4 border-2 border-[var(--ink)]/30 bg-[var(--surface)]"
+                        style={{ borderRadius: '12px 9px 14px 10px / 9px 14px 9px 12px' }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="font-heading font-bold">{integration.name}</div>
                             <code className="text-[0.7rem] text-[var(--ink)]/55">{integration.id}</code>
                           </div>
-                          <StatusBadge variant="info">Integration</StatusBadge>
+                          <SketchBadge variant="blue">Integration</SketchBadge>
                         </div>
                         {integration.description && (
                           <p className="mt-2 text-sm font-body text-[var(--ink)]/75">
@@ -1132,7 +1135,7 @@ export const PluginsView: React.FC = () => {
                               <div className="text-xs font-mono text-[var(--ink)]/55 break-all">
                                 {integration.provider.base_url}
                               </div>
-                              <Button
+                              <SketchButton
                                 variant="primary"
                                 className="gap-2"
                                 disabled={busy !== null || selected.status !== 'enabled'}
@@ -1140,7 +1143,7 @@ export const PluginsView: React.FC = () => {
                               >
                                 <PackagePlus className="w-4 h-4" />
                                 {busy === `setup:${integration.id}` ? 'Setting up…' : 'Set up Provider'}
-                              </Button>
+                              </SketchButton>
                               <p className="text-xs font-body text-[var(--ink)]/60">
                                 Create the upstream provider from the plugin&apos;s validated defaults.
                               </p>
@@ -1172,7 +1175,7 @@ export const PluginsView: React.FC = () => {
                                   </p>
                                 )}
                                 {compatibleProviders.map((provider) => (
-                                  <Button
+                                  <SketchButton
                                     key={provider.id}
                                     variant="primary"
                                     className="gap-2"
@@ -1187,7 +1190,7 @@ export const PluginsView: React.FC = () => {
                                   >
                                     <LogIn className="w-4 h-4" />
                                     {action.label} · {provider.name}
-                                  </Button>
+                                  </SketchButton>
                                 ))}
                                 {compatibleProviders.length === 0 &&
                                   (integration.provider ? (
@@ -1195,7 +1198,7 @@ export const PluginsView: React.FC = () => {
                                       <div className="text-xs font-mono text-[var(--ink)]/55 break-all">
                                         {integration.provider.base_url}
                                       </div>
-                                      <Button
+                                      <SketchButton
                                         variant="primary"
                                         className="gap-2"
                                         disabled={busy !== null || selected.status !== 'enabled'}
@@ -1211,7 +1214,7 @@ export const PluginsView: React.FC = () => {
                                         {busy === `setup:${integration.id}`
                                           ? 'Setting up…'
                                           : `Set up & ${action.label.toLowerCase()}`}
-                                      </Button>
+                                      </SketchButton>
                                       <p className="text-xs font-body text-[var(--ink)]/60">
                                         Kinetix will create the provider from the plugin&apos;s
                                         validated defaults, bind only this integration&apos;s
@@ -1233,11 +1236,11 @@ export const PluginsView: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                </Card>
+                </WobblyCard>
               )}
 
               {settings.length > 0 && (
-                <Card className="p-5">
+                <WobblyCard className="p-5">
                   <div className="flex flex-col md:flex-row md:items-start gap-4">
                     <div className="flex-1">
                       <h4 className="text-lg font-heading font-bold">Settings</h4>
@@ -1245,13 +1248,13 @@ export const PluginsView: React.FC = () => {
                         These values are stored encrypted by Kinetix. Secret values are write-only in the dashboard.
                       </p>
                     </div>
-                    <Button
+                    <SketchButton
                       variant="primary"
                       disabled={busy !== null}
                       onClick={() => void saveSettings()}
                     >
                       {busy === 'settings' ? 'Saving…' : 'Save settings'}
-                    </Button>
+                    </SketchButton>
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1337,11 +1340,11 @@ export const PluginsView: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                </Card>
+                </WobblyCard>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <Card className="p-5">
+                <WobblyCard className="p-5">
                   <h4 className="text-lg font-heading font-bold flex items-center gap-2 mb-3">
                     <Box className="w-5 h-5 text-[var(--pen-blue)]" />
                     Capabilities
@@ -1357,9 +1360,9 @@ export const PluginsView: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                </Card>
+                </WobblyCard>
 
-                <Card variant="raised" className="p-5">
+                <WobblyCard variant="muted" className="p-5">
                   <h4 className="text-lg font-heading font-bold mb-3">Runtime limits</h4>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <dt className="text-[var(--ink)]/65">Memory</dt><dd className="font-mono">{selected.limits.memory}</dd>
@@ -1375,11 +1378,11 @@ export const PluginsView: React.FC = () => {
                       </>
                     )}
                   </dl>
-                </Card>
+                </WobblyCard>
               </div>
 
               {detail?.packages && detail.packages.length > 0 && (
-                <Card variant="raised" className="p-5">
+                <WobblyCard variant="muted" className="p-5">
                   <h4 className="text-lg font-heading font-bold mb-3">Retained packages</h4>
                   <div className="space-y-2">
                     {detail.packages.map((pkg) => {
@@ -1389,20 +1392,20 @@ export const PluginsView: React.FC = () => {
                           key={pkg.package_sha256}
                           className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1 border-b border-dashed border-[var(--ink)]/20 pb-2"
                         >
-                          <StatusBadge variant={current ? 'green' : 'default'}>
+                          <SketchBadge variant={current ? 'green' : 'default'}>
                             v{pkg.version}
-                          </StatusBadge>
+                          </SketchBadge>
                           <code className="text-xs break-all self-center">{pkg.package_sha256}</code>
                           {current ? (
-                            <StatusBadge variant="healthy">Active</StatusBadge>
+                            <SketchBadge variant="green">Active</SketchBadge>
                           ) : (
-                            <Button
+                            <SketchButton
                               variant="secondary"
                               disabled={busy !== null}
                               onClick={() => void reviewRollback(selected.id, pkg.package_sha256)}
                             >
                               {busy === `preview:${pkg.package_sha256}` ? 'Reviewing…' : 'Review rollback'}
-                            </Button>
+                            </SketchButton>
                           )}
                           <span className="text-xs text-[var(--ink)]/55">Stored package</span>
                           <code className="text-xs text-[var(--ink)]/55 break-all">{pkg.package_path}</code>
@@ -1411,11 +1414,11 @@ export const PluginsView: React.FC = () => {
                       );
                     })}
                   </div>
-                </Card>
+                </WobblyCard>
               )}
 
               {rollbackPreview && (
-                <Card className="p-5">
+                <WobblyCard decoration="tape" className="p-5">
                   <div className="flex flex-col md:flex-row md:items-start gap-4">
                     <div className="flex-1">
                       <h4 className="text-lg font-heading font-bold">
@@ -1426,9 +1429,9 @@ export const PluginsView: React.FC = () => {
                         Rollback will still recompile it, disable the plugin, and clear every approved permission.
                       </p>
                     </div>
-                    <StatusBadge variant={rollbackPreview.signature === 'verified' ? 'green' : 'yellow'}>
+                    <SketchBadge variant={rollbackPreview.signature === 'verified' ? 'green' : 'yellow'}>
                       {rollbackPreview.signature}
-                    </StatusBadge>
+                    </SketchBadge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1479,7 +1482,7 @@ export const PluginsView: React.FC = () => {
                   </div>
 
                   <div className="mt-4 flex gap-2 flex-wrap">
-                    <Button
+                    <SketchButton
                       variant="primary"
                       disabled={busy !== null}
                       onClick={() => void confirmRollback()}
@@ -1487,19 +1490,19 @@ export const PluginsView: React.FC = () => {
                       {busy === `rollback:${rollbackPreview.package_sha256}`
                         ? 'Restoring…'
                         : `Confirm rollback to v${rollbackPreview.target_version}`}
-                    </Button>
-                    <Button
+                    </SketchButton>
+                    <SketchButton
                       variant="secondary"
                       disabled={busy !== null}
                       onClick={() => setRollbackPreview(null)}
                     >
                       Cancel
-                    </Button>
+                    </SketchButton>
                   </div>
-                </Card>
+                </WobblyCard>
               )}
 
-              <Card className="p-5">
+              <WobblyCard decoration="tape" className="p-5">
                 <div className="flex flex-col md:flex-row md:items-start gap-4">
                   <div className="flex-1">
                     <h4 className="text-lg font-heading font-bold flex items-center gap-2">
@@ -1511,9 +1514,9 @@ export const PluginsView: React.FC = () => {
                       authority has been reviewed.
                     </p>
                   </div>
-                  <StatusBadge variant={fullyApproved ? 'green' : 'yellow'}>
+                  <SketchBadge variant={fullyApproved ? 'green' : 'yellow'}>
                     {fullyApproved ? 'Approved' : 'Approval required'}
-                  </StatusBadge>
+                  </SketchBadge>
                 </div>
 
                 <div className="mt-4 space-y-3">
@@ -1564,7 +1567,7 @@ export const PluginsView: React.FC = () => {
 
                 <div className="mt-4 flex gap-2 flex-wrap">
                   {!fullyApproved && (
-                    <Button
+                    <SketchButton
                       variant="primary"
                       disabled={busy !== null}
                       onClick={() =>
@@ -1577,10 +1580,10 @@ export const PluginsView: React.FC = () => {
                       className="gap-2"
                     >
                       <ShieldCheck className="w-4 h-4" /> Approve current permissions
-                    </Button>
+                    </SketchButton>
                   )}
                   {permissions?.approved.map((grant) => (
-                    <Button
+                    <SketchButton
                       key={grant.permission}
                       variant="secondary"
                       disabled={busy !== null}
@@ -1593,12 +1596,12 @@ export const PluginsView: React.FC = () => {
                       }
                     >
                       Revoke {grant.permission}
-                    </Button>
+                    </SketchButton>
                   ))}
                 </div>
-              </Card>
+              </WobblyCard>
 
-              <Card variant="raised" className="p-5">
+              <WobblyCard variant="muted" className="p-5">
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
                   <div className="flex-1">
                     <h4 className="font-heading font-bold">Remove plugin</h4>
@@ -1606,7 +1609,7 @@ export const PluginsView: React.FC = () => {
                       Removes the installed plugin and its host-managed plugin state.
                     </p>
                   </div>
-                  <Button
+                  <SketchButton
                     variant="danger"
                     disabled={busy !== null}
                     onClick={() => {
@@ -1618,14 +1621,14 @@ export const PluginsView: React.FC = () => {
                     className="gap-2"
                   >
                     <Trash2 className="w-4 h-4" /> Remove
-                  </Button>
+                  </SketchButton>
                 </div>
-              </Card>
+              </WobblyCard>
             </div>
           ) : (
-            <Card variant="raised" className="p-5 text-xs text-[var(--text-muted)]">
+            <WobblyCard variant="muted" className="p-5 text-sm font-body text-[var(--ink)]/70">
               Select an installed plugin to inspect its capabilities and permissions.
-            </Card>
+            </WobblyCard>
           )}
         </div>
       </div>

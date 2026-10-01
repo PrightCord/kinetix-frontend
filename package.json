@@ -7,7 +7,10 @@
     "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/lib/api.test.mjs test/**/*.test.mjs",
+    "sync": "node scripts/sync-dashboard.mjs",
+    "check-parity": "node scripts/check-dashboard-parity.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.546.0",

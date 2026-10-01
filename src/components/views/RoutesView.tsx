@@ -1,21 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Shuffle,
-  Plus,
-  ArrowDown,
-  ArrowUp,
-  Layers,
-  Trash2,
-  AlertTriangle,
-  PlayCircle,
-  Search,
-  X,
-  Table as TableIcon,
-  MoreHorizontal,
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { Shuffle, Plus, ArrowDown, ArrowUp, Shield, Check, Layers, ArrowRight, Trash2, AlertTriangle, PlayCircle, Search, X } from 'lucide-react';
 import { Route, Account, ModelConfig } from '../../types';
-import { Card, Button, StatusBadge, Input, Select, TerminalPanel } from '../KinetixUI';
-import { Kinetix } from '../../lib/resources';
+import { WobblyCard, SketchButton, SketchBadge } from '../HandDrawnElements';
+import { DESIGN_TOKENS } from '../../lib/designSystem';
+import {
+  DryRunResult,
+  Kinetix,
+  RouteValidationResult,
+} from '../../lib/resources';
 
 const ROUTE_STRATEGIES: ReadonlyArray<readonly [Route['selectionStrategy'], string]> = [
   ['priority', 'Priority (Ordered fallback on failure)'],
@@ -25,13 +17,50 @@ const ROUTE_STRATEGIES: ReadonlyArray<readonly [Route['selectionStrategy'], stri
   ['adaptive', 'Adaptive (capacity + TTFT EWMA)'],
 ];
 
+const DRY_RUN_REASON_LABELS: Record<string, string> = {
+  predicate: 'Predicate did not match',
+  account_state: 'Account unavailable',
+  provider_not_permitted: 'Key cannot access provider',
+  provider_circuit_open: 'Provider circuit unavailable',
+  route_concurrency: 'Route concurrency limit reached',
+  soft_quota: 'Simulated quota reached',
+  account_soft_quota: 'Account quota reached',
+  quota_fallback_disabled: 'Quota reached; fallback is disabled',
+  unreachable_after_quota_failure: 'Not reached after quota failure',
+  stochastic_selection: 'Selection may vary at runtime',
+  adaptive_saturated: 'Adaptive capacity exhausted',
+  context_window: 'Input exceeds context window',
+  higher_ranked_candidate_selected: 'Another eligible target ranked first',
+  another_account_ordered_first: 'Another account was ordered first',
+  selected_by_route_strategy: 'Selected by route strategy',
+  selected_by_account_pool: 'Selected from account pool',
+};
+
+const formatDryRunReason = (reason: string) => {
+  const label = DRY_RUN_REASON_LABELS[reason];
+  if (label) return label;
+
+  const capabilityReason = reason.match(
+    /^required (vision|tool_calling|reasoning) capability is (unknown|unsupported)( under strict capability mode)?$/,
+  );
+  if (capabilityReason) {
+    const [, capability, status, strictMode] = capabilityReason;
+    return `Required ${capability.replace('_', ' ')} support is ${status}${strictMode ? ' (strict mode)' : ''}`;
+  }
+
+  return reason.replaceAll('_', ' ');
+};
+
 interface RoutesViewProps {
   routes: Route[];
   accounts: Account[];
   models: ModelConfig[];
+  /** Providers the selected virtual key is restricted to (FR-12.19); empty =
+   *  no restriction. Used by the Dry Run to reflect access restrictions. */
   allowedProviders?: string[];
-  onAddRoute: (newRoute: Route) => void;
-  onUpdateRoute: (updated: Route) => void;
+  onAddRoute: (newRoute: Route) => Promise<void>;
+  onUpdateRoute: (updated: Route) => Promise<void>;
+  onValidateRoute: (route: Route) => Promise<RouteValidationResult>;
   onDeleteRoute: (routeId: string) => void;
 }
 
@@ -39,45 +68,45 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   routes,
   accounts,
   models,
+  allowedProviders,
   onAddRoute,
   onUpdateRoute,
+  onValidateRoute,
   onDeleteRoute,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string>(routes[0]?.id || '');
   const [confirmDeleteRouteId, setConfirmDeleteRouteId] = useState<string | null>(null);
-  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [confirmRemoveTargetId, setConfirmRemoveTargetId] = useState<string | null>(null);
   const [routeSearch, setRouteSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'cascade' | 'table'>('cascade');
-  const overflowRef = useRef<HTMLDivElement>(null);
+  const [routeValidationResult, setRouteValidationResult] = useState<RouteValidationResult | null>(null);
+  const [routeValidationError, setRouteValidationError] = useState<string | null>(null);
+  const [validatingRoute, setValidatingRoute] = useState(false);
+  const [routeMutationError, setRouteMutationError] = useState<string | null>(null);
 
-  // New route form state
+  // New route form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [strategy, setStrategy] = useState<Route['selectionStrategy']>('adaptive');
+  const [initialTargetModelId, setInitialTargetModelId] = useState('');
+  const [initialTargetAccountId, setInitialTargetAccountId] = useState('');
+  const [strategy, setStrategy] = useState<Route['selectionStrategy']>('priority');
+  const [maxConcurrentRequests, setMaxConcurrentRequests] = useState('');
   const [on429, setOn429] = useState(true);
   const [onQuota, setOnQuota] = useState(true);
   const [on5xx, setOn5xx] = useState(true);
   const [sticky, setSticky] = useState(true);
-  const [dryRunResult, setDryRunResult] = useState<any | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<(DryRunResult | { error: string }) | null>(null);
   const [dryRunning, setDryRunning] = useState(false);
+  const [dryRunHasTools, setDryRunHasTools] = useState(false);
+  const [dryRunHasImages, setDryRunHasImages] = useState(false);
+  const [dryRunHasReasoning, setDryRunHasReasoning] = useState(false);
+  const [dryRunInputTokens, setDryRunInputTokens] = useState('1000');
+  const [dryRunAllowFallback, setDryRunAllowFallback] = useState(true);
+  const [dryRunSession, setDryRunSession] = useState('');
 
-  // Add-target form state
+  // Add-target form state (per selected route)
   const [newTargetModelId, setNewTargetModelId] = useState('');
   const [newTargetAccountId, setNewTargetAccountId] = useState('');
-
-  // Close overflow menu on outside click
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setShowOverflowMenu(false);
-      }
-    };
-    if (showOverflowMenu) {
-      document.addEventListener('mousedown', handleOutsideClick);
-      return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }
-  }, [showOverflowMenu]);
 
   const normalizedRouteSearch = routeSearch.trim().toLowerCase();
   const filteredRoutes = routes.filter((route) => {
@@ -100,14 +129,21 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
       ...targetTerms,
     ].some((value) => String(value ?? '').toLowerCase().includes(normalizedRouteSearch));
   });
-
   const activeRoute =
     filteredRoutes.find((route) => route.id === selectedRouteId) ||
     filteredRoutes[0];
+  const initialTargetModel = models.find((model) => model.id === initialTargetModelId);
+  const initialTargetAccounts = accounts.filter(
+    (account) =>
+      account.providerId === initialTargetModel?.providerId &&
+      account.status !== 'disabled',
+  );
 
+  /** Renumber targets by their (already ordered) position. */
   const renumber = (targets: Route['targets']): Route['targets'] =>
     targets.map((t, i) => ({ ...t, priority: i + 1 }));
 
+  /** Move a target up/down in the priority order and persist. */
   const moveTarget = (route: Route, index: number, dir: -1 | 1) => {
     const next = index + dir;
     if (next < 0 || next >= route.targets.length) return;
@@ -117,6 +153,7 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     onUpdateRoute({ ...route, targets: reordered, totalHops: Math.max(0, reordered.length - 1) });
   };
 
+  /** Add a chosen model (and optional account) as a new fallback tier. */
   const handleAddTarget = (route: Route) => {
     const model = models.find((m) => m.id === newTargetModelId);
     if (!model) return;
@@ -124,12 +161,12 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
     const target = {
       id: `tgt-${Date.now()}`,
       accountId: account?.id ?? '',
-      accountLabel: account?.label ?? 'Auto (pool rotation)',
+      accountLabel: account?.label ?? '(auto)',
       providerName: model.providerName,
       modelId: model.id,
       modelDisplayName: model.displayName,
       priority: route.targets.length + 1,
-      weight: 100,
+      weight: 1,
     };
     const targets = renumber([...route.targets, target]);
     onUpdateRoute({ ...route, targets, totalHops: Math.max(0, targets.length - 1) });
@@ -140,659 +177,932 @@ export const RoutesView: React.FC<RoutesViewProps> = ({
   const handleDryRun = async () => {
     if (!activeRoute) return;
     setDryRunning(true);
-    setDryRunResult(null);
     try {
-      const res = await Kinetix.dryRunRoute(activeRoute.name, {
-        strategy: activeRoute.selectionStrategy,
-        targets: activeRoute.targets,
-        fallback_triggers: activeRoute.fallbackTriggers,
+      const r = await Kinetix.dryRunRoute(activeRoute.name, {
+        frontend: 'openai',
+        has_tools: dryRunHasTools,
+        has_images: dryRunHasImages,
+        has_reasoning: dryRunHasReasoning,
+        input_tokens: Number(dryRunInputTokens) || 0,
+        allow_fallback: dryRunAllowFallback,
+        session: dryRunSession.trim() || undefined,
+        allowed_providers: allowedProviders ?? [],
       });
-      setDryRunResult(res);
+      setDryRunResult(r);
     } catch (e) {
-      setDryRunResult({
-        error: e instanceof Error ? e.message : 'Dry run failed',
-        trace: ['Failed to compute candidate selection trace'],
-      });
+      setDryRunResult({ error: (e as Error).message });
     } finally {
       setDryRunning(false);
     }
   };
 
-  const handleCreateRouteSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const handleValidateRoute = async () => {
+    if (!activeRoute) return;
+    setValidatingRoute(true);
+    setRouteValidationError(null);
+    try {
+      setRouteValidationResult(await onValidateRoute(activeRoute));
+    } catch (error) {
+      setRouteValidationResult(null);
+      setRouteValidationError((error as Error).message);
+    } finally {
+      setValidatingRoute(false);
+    }
+  };
 
-    onAddRoute({
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const model = models.find((candidate) => candidate.id === initialTargetModelId);
+    if (!name.trim() || !model) return;
+    const account = accounts.find((candidate) => candidate.id === initialTargetAccountId);
+    const target = {
+      id: `tgt-${Date.now()}`,
+      accountId: account?.id ?? '',
+      accountLabel: account?.label ?? '(auto)',
+      providerName: model.providerName,
+      modelId: model.id,
+      modelDisplayName: model.displayName,
+      priority: 1,
+      weight: 1,
+    };
+    const newRoute: Route = {
       id: `route-${Date.now()}`,
-      name: name.trim(),
-      description: description.trim(),
+      name: name.trim().toLowerCase().replace(/\s+/g, '-'),
+      description: description.trim() || 'Custom fallback route',
       selectionStrategy: strategy,
-      totalHops: 0,
-      status: 'active',
       fallbackTriggers: {
         on429,
         onQuota,
         on5xx,
         onTimeout: true,
       },
+      targets: [target],
       portabilityPolicy: 'strip_with_warning',
       cacheAffinity: true,
       stickyRouting: sticky,
-      targets: [],
-    });
+      maxAttempts: null,
+      maxConcurrentRequests: maxConcurrentRequests === '' ? null : Number(maxConcurrentRequests),
+      totalHops: 0,
+      status: 'active',
+    };
 
-    setName('');
-    setDescription('');
-    setShowCreateModal(false);
+    setRouteMutationError(null);
+    try {
+      await onAddRoute(newRoute);
+      setSelectedRouteId(newRoute.id);
+      setShowCreateModal(false);
+      setName('');
+      setDescription('');
+      setInitialTargetModelId('');
+      setInitialTargetAccountId('');
+      setMaxConcurrentRequests('');
+    } catch (error) {
+      setRouteMutationError((error as Error).message);
+    }
   };
-
-  const formatTriggers = (triggers: Route['fallbackTriggers']) => {
-    if (!triggers) return '429 / quota / 5xx';
-    const parts: string[] = [];
-    if (triggers.on429) parts.push('429');
-    if (triggers.onQuota) parts.push('quota');
-    if (triggers.on5xx) parts.push('upstream 5xx');
-    if (triggers.onTimeout) parts.push('timeout');
-    return parts.length > 0 ? parts.join(' / ') : 'manual only';
-  };
-
-  const formatTargetCount = (count: number) =>
-    `${count} ${count === 1 ? 'target' : 'targets'}`;
 
   return (
-    <div className="space-y-5">
-      {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Routes &amp; Fallback
+          <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+            <span>Routes & Automatic Fallback</span>
+            <SketchBadge variant="yellow" rotation="1deg">
+              FR-12 Architecture
+            </SketchBadge>
           </h2>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Define multi-provider routing trees, account priority cascade, and automated failover rules.
+          <p className="text-base font-body text-[var(--ink)]/80">
+            Group accounts across providers under one model name. If an account is rate-limited or exhausted, Kinetix falls back automatically before the first byte!
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          {/* View mode toggle: Cascade | Table */}
-          <div className="inline-flex items-center h-8 rounded-[4px] border border-[var(--border)] bg-[var(--surface-raised)] p-0.5 text-xs font-mono shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode('cascade')}
-              className={`h-full px-2.5 rounded-[3px] flex items-center gap-1.5 transition-colors cursor-pointer select-none ${
-                viewMode === 'cascade'
-                  ? 'bg-[var(--surface)] text-[var(--text-primary)] font-semibold shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Cascade</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('table')}
-              className={`h-full px-2.5 rounded-[3px] flex items-center gap-1.5 transition-colors cursor-pointer select-none ${
-                viewMode === 'table'
-                  ? 'bg-[var(--surface)] text-[var(--text-primary)] font-semibold shadow-xs'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-              }`}
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span>Table</span>
-            </button>
-          </div>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowCreateModal(true)}
-            className="shrink-0 whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Route</span>
-          </Button>
-        </div>
+        <SketchButton
+          variant="primary"
+          size="md"
+          onClick={() => setShowCreateModal(true)}
+          className="gap-2 font-heading font-bold"
+        >
+          <Plus className="w-5 h-5" />
+          Create New Route
+        </SketchButton>
       </div>
 
+      {/* Main Grid: Routes selector on left, Deep Inspector on right */}
       {routes.length === 0 ? (
-        <Card className="p-8 text-center">
-          <Shuffle className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2 opacity-60" />
-          <h3 className="text-sm font-semibold text-[var(--text-primary)]">No Routes Configured</h3>
-          <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto mt-1 mb-4">
-            Routes allow you to group multiple upstream providers and accounts under a single endpoint model.
+        <WobblyCard decoration="tack" className="p-10 text-center bg-[var(--surface)]">
+          <Shuffle className="w-12 h-12 text-[var(--pen-blue)] mx-auto mb-3 opacity-60" />
+          <h3 className="text-2xl font-heading font-bold text-[var(--ink)]">No Routes Configured</h3>
+          <p className="text-base font-body text-[var(--ink)]/80 max-w-lg mx-auto mt-2 mb-6">
+            Routes allow you to group multiple upstream provider accounts and models under one seamless model alias. If one account exhausts its quota or hits rate limits, Kinetix instantly retries on the next healthy tier.
           </p>
-          <Button variant="primary" size="sm" onClick={() => setShowCreateModal(true)}>
-            <Plus className="w-3.5 h-3.5" />
-            Create First Route
-          </Button>
-        </Card>
-      ) : viewMode === 'table' ? (
-        /* Structured Comparison Table */
-        <Card className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="kinetix-table">
-              <thead>
-                <tr>
-                  <th>Route Name</th>
-                  <th>Description</th>
-                  <th>Strategy</th>
-                  <th>Targets</th>
-                  <th>Failover Triggers</th>
-                  <th>Sticky Routing</th>
-                  <th>Status</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="font-mono text-xs divide-y divide-[var(--border-subtle)]">
-                {routes.map((route) => (
-                  <tr
-                    key={route.id}
-                    onClick={() => {
-                      setSelectedRouteId(route.id);
-                      setViewMode('cascade');
-                    }}
-                    className="hover:bg-[var(--surface-raised)] cursor-pointer"
-                  >
-                    <td className="font-semibold text-[var(--text-primary)]">{route.name}</td>
-                    <td className="text-[var(--text-secondary)] font-sans max-w-xs truncate">
-                      {route.description}
-                    </td>
-                    <td>
-                      <span className="text-[var(--text-secondary)] font-medium">{route.selectionStrategy}</span>
-                    </td>
-                    <td>
-                      {formatTargetCount(route.targets.length)}
-                    </td>
-                    <td className="text-[var(--text-muted)]">
-                      {formatTriggers(route.fallbackTriggers)}
-                    </td>
-                    <td>{route.stickyRouting ? 'Enabled' : 'Disabled'}</td>
-                    <td>
-                      {route.status !== 'active' ? (
-                        <StatusBadge variant="danger">
-                          {route.status}
-                        </StatusBadge>
-                      ) : (
-                        <span className="text-[var(--text-muted)] font-mono text-[11px]">active</span>
-                      )}
-                    </td>
-                    <td className="text-right font-sans">
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRouteId(route.id);
-                          setViewMode('cascade');
-                        }}
-                      >
-                        Inspect
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+          <SketchButton
+            variant="primary"
+            size="md"
+            onClick={() => setShowCreateModal(true)}
+            className="gap-2 font-heading font-bold"
+          >
+            <Plus className="w-5 h-5" />
+            Create First Fallback Route
+          </SketchButton>
+        </WobblyCard>
       ) : (
-        /* Master-Detail Cascade Grid */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-          {/* Left Column: Route Selector List (Reduced ~18-20% height, dense, no loud green pills) */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-mono text-[var(--text-muted)] px-0.5">
-              <span>ROUTES ({filteredRoutes.length})</span>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column: List of Routes */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+              <Shuffle className="w-5 h-5 text-[var(--pen-blue)]" />
+              Configured Routes ({filteredRoutes.length}/{routes.length})
+            </h3>
 
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ink)]/50" />
               <input
-                type="text"
+                type="search"
                 value={routeSearch}
                 onChange={(e) => setRouteSearch(e.target.value)}
                 placeholder="Search routes…"
-                className="w-full pl-8 pr-7 py-1.5 bg-[var(--surface-raised)] border border-[var(--border)] rounded-[4px] font-mono text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--primary)] focus-visible:outline-none"
+                className="w-full pl-9 pr-9 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
               />
               {routeSearch && (
-                <button
-                  type="button"
-                  onClick={() => setRouteSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-                  title="Clear search"
-                >
-                  <X className="w-3 h-3" />
+                <button type="button" onClick={() => setRouteSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--ink)]/60 hover:text-[var(--marker-red)] cursor-pointer" title="Clear search">
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              {filteredRoutes.map((route) => {
-                const isSelected = route.id === activeRoute?.id;
-                const isAbnormal = route.status !== 'active';
-                return (
-                  <div
-                    key={route.id}
-                    onClick={() => {
-                      setSelectedRouteId(route.id);
-                      setConfirmDeleteRouteId(null);
-                      setShowOverflowMenu(false);
-                    }}
-                    className={`px-3 py-2.5 rounded-[4px] border cursor-pointer transition-all ${
-                      isSelected
-                        ? 'bg-[var(--surface-raised)] border-[var(--primary)] shadow-xs'
-                        : 'bg-[var(--surface)] border-[var(--border)] hover:border-[var(--border-strong)]'
-                    }`}
-                  >
-                    {/* Row 1: Name and Strategy (plus anomaly badge only if degraded/disabled) */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs font-semibold text-[var(--text-primary)] truncate">
+            {filteredRoutes.length === 0 && (
+              <div className="p-5 text-center bg-[var(--surface)] border-2 border-dashed border-[var(--ink)]/30 rounded">
+                <p className="text-sm font-mono text-[var(--ink)]/70">No routes match “{routeSearch}”.</p>
+                <button onClick={() => setRouteSearch('')} className="mt-2 text-xs font-heading font-bold text-[var(--pen-blue)] hover:underline cursor-pointer">
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {filteredRoutes.map((route, idx) => {
+              const isSelected = route.id === activeRoute?.id;
+              const tilt = idx % 2 === 0 ? '-rotate-0.5' : 'rotate-0.5';
+
+              return (
+                <div
+                  key={route.id}
+                  onClick={() => setSelectedRouteId(route.id)}
+                  className={`p-4 border-2 border-[var(--ink)] cursor-pointer transition-all ${tilt} ${
+                    isSelected
+                      ? 'bg-[var(--postit)] sketch-shadow -translate-y-1 font-bold'
+                      : 'bg-[var(--surface)] hover:bg-[var(--erased-soft)] sketch-shadow-sm'
+                  }`}
+                  style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="font-mono text-sm px-2 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded">
                         {route.name}
                       </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {isAbnormal && (
-                          <StatusBadge variant="danger" size="sm">
-                            {route.status}
-                          </StatusBadge>
-                        )}
-                        <span className="font-mono text-[11px] text-[var(--text-muted)]">
-                          {route.selectionStrategy}
-                        </span>
-                      </div>
+                      <h4 className="font-heading text-lg mt-1 text-[var(--ink)]">{route.description}</h4>
                     </div>
-
-                    {/* Row 2: Description */}
-                    {route.description && (
-                      <p className="text-xs text-[var(--text-muted)] truncate mt-0.5 leading-snug">
-                        {route.description}
-                      </p>
-                    )}
-
-                    {/* Row 3: Target Count (fixed pluralization, no conflicting 0 hops) */}
-                    <div className="mt-1 text-[11px] font-mono text-[var(--text-muted)]">
-                      {formatTargetCount(route.targets.length)}
-                    </div>
+                    <SketchBadge variant={route.status === 'active' ? 'green' : 'red'}>
+                      {route.status}
+                    </SketchBadge>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="mt-3 pt-2 border-t border-[var(--ink)]/20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-mono text-[var(--ink)]/70">
+                    <span>Strategy: <strong>{route.selectionStrategy}</strong></span>
+                    <span>{route.targets.length} targets • {route.totalHops} hops</span>
+                    <span>Concurrency: <strong>{route.maxConcurrentRequests ?? 'unlimited'}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Right Column: Ordered Fallback Cascade Editor */}
+          {/* Right Column: Selected Route Detail & Target Fallback Chain */}
           {activeRoute && (
-            <div className="lg:col-span-2 space-y-4">
-              <Card>
-                {/* Route Detail Header */}
-                <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-[var(--border)]">
-                  <div className="min-w-0">
+            <div className="lg:col-span-2 min-w-0 space-y-5">
+              <WobblyCard decoration="tape" className="p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/30">
+                  <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base font-semibold text-[var(--text-primary)] font-mono">
-                        {activeRoute.name}
+                      <h3 className="text-3xl font-heading font-bold text-[var(--ink)]">
+                        Route: <span className="underline decoration-wavy decoration-[var(--marker-red)]">{activeRoute.name}</span>
                       </h3>
-                      <span className="text-[11px] font-mono text-[var(--text-secondary)] px-2 py-0.5 rounded bg-[var(--surface-raised)] border border-[var(--border)]">
-                        {activeRoute.selectionStrategy}
-                      </span>
-                      {activeRoute.status !== 'active' && (
-                        <StatusBadge variant="danger" size="sm">
-                          {activeRoute.status}
-                        </StatusBadge>
-                      )}
-                      <span className="font-mono text-xs text-[var(--text-muted)]">
-                        {formatTargetCount(activeRoute.targets.length)}
-                      </span>
+                      <SketchBadge variant="blue" rotation="-1deg">
+                        {activeRoute.selectionStrategy} strategy
+                      </SketchBadge>
                     </div>
-                    {activeRoute.description && (
-                      <p className="text-xs text-[var(--text-muted)] mt-1">{activeRoute.description}</p>
-                    )}
+                    <p className="text-base font-body text-[var(--ink)]/80 mt-1">
+                      {activeRoute.description}
+                    </p>
                   </div>
 
-                  {/* Actions: Dry Run Trace as primary action; Delete separated in overflow menu */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Button
-                      size="xs"
-                      variant="secondary"
-                      onClick={handleDryRun}
-                      isLoading={dryRunning}
-                      title="Simulate candidate selection trace"
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-mono bg-[var(--erased)] px-2 py-1 border border-[var(--ink)] rounded">
+                      Total Fallback Hops: <strong>{activeRoute.totalHops}</strong>
+                    </span>
+
+                    <button
+                      onClick={handleValidateRoute}
+                      disabled={validatingRoute}
+                      className="px-2.5 py-1 text-xs font-heading font-bold text-[var(--pen-green)] hover:bg-[var(--tint-green)] border border-[var(--pen-green)]/50 hover:border-[var(--pen-green)] rounded flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                      title="Check this Route against persisted local metadata without upstream calls"
                     >
-                      <PlayCircle className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      <span>Dry Run Trace</span>
-                    </Button>
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>{validatingRoute ? 'Validating…' : 'Validate'}</span>
+                    </button>
 
-                    {/* Separated Overflow Menu for Dangerous Actions */}
-                    <div className="relative" ref={overflowRef}>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => setShowOverflowMenu(!showOverflowMenu)}
-                        className="px-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                        title="Route actions"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
+                    <button
+                      onClick={handleDryRun}
+                      disabled={dryRunning}
+                      className="px-2.5 py-1 text-xs font-heading font-bold text-[var(--pen-blue)] hover:bg-[var(--tint-blue)] border border-[var(--pen-blue)]/50 hover:border-[var(--pen-blue)] rounded flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50"
+                      title="Compute candidate ordering and would-be selection without calling upstream (FR-8.7)"
+                    >
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      <span>{dryRunning ? 'Dry Running…' : 'Dry Run'}</span>
+                    </button>
 
-                      {showOverflowMenu && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--surface-raised)] border border-[var(--border-strong)] rounded-[4px] shadow-lg py-1 z-20 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowOverflowMenu(false);
-                              setConfirmDeleteRouteId(activeRoute.id);
-                            }}
-                            className="w-full px-3 py-1.5 text-left text-[var(--danger)] hover:bg-[var(--danger-bg)] flex items-center gap-2 cursor-pointer font-sans"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete route…</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Destructive Action Confirmation Banner */}
-                {confirmDeleteRouteId === activeRoute.id && (
-                  <div className="my-3 p-3 bg-[var(--danger-bg)] border border-[var(--danger-border)] rounded-[4px] flex items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-2 text-[var(--danger)] font-medium">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Delete route <b>{activeRoute.name}</b> and all fallback targets?</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        size="xs"
-                        variant="danger"
-                        onClick={() => {
-                          onDeleteRoute(activeRoute.id);
-                          setConfirmDeleteRouteId(null);
-                        }}
-                      >
-                        Confirm Delete
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="secondary"
-                        onClick={() => setConfirmDeleteRouteId(null)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Dry Run Trace Output */}
-                {dryRunResult && (
-                  <div className="my-3">
-                    <TerminalPanel title="ROUTE RESOLUTION DRY-RUN TRACE" copyText={JSON.stringify(dryRunResult, null, 2)}>
-                      <div className="space-y-1">
-                        <div className="text-[var(--primary)] font-semibold">
-                          Target Selected: {dryRunResult.selected?.modelId || 'None'}
-                        </div>
-                        {(dryRunResult.trace || []).map((t: string, i: number) => (
-                          <div key={i} className="text-[var(--text-secondary)]">
-                            → {t}
-                          </div>
-                        ))}
-                      </div>
-                    </TerminalPanel>
-                  </div>
-                )}
-
-                {/* Ordered Cascade Section */}
-                <div className="py-3 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-mono text-[var(--text-muted)] tracking-wider">
-                    <span className="font-semibold text-[var(--text-secondary)] uppercase">
-                      Ordered Cascade
-                    </span>
-                    <span className="text-[11px]">
-                      Failover on: <span className="text-[var(--text-secondary)]">{formatTriggers(activeRoute.fallbackTriggers)}</span>
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {activeRoute.targets.length === 0 ? (
-                      <div className="p-6 text-center border border-dashed border-[var(--border)] rounded-[4px] text-xs text-[var(--text-muted)]">
-                        No targets assigned to this route yet. Add an upstream model target below.
+                    {confirmDeleteRouteId === activeRoute.id ? (
+                      <div className="flex items-center gap-1.5 bg-[var(--tint-red)] px-2.5 py-1 border border-[var(--marker-red)] rounded text-xs font-heading">
+                        <span className="text-[var(--danger-text)] font-bold">Delete {activeRoute.name}?</span>
+                        <button
+                          onClick={() => {
+                            onDeleteRoute(activeRoute.id);
+                            setConfirmDeleteRouteId(null);
+                          }}
+                          className="px-2 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:brightness-90 cursor-pointer"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteRouteId(null)}
+                          className="px-2 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded hover:bg-[var(--erased)] cursor-pointer"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     ) : (
-                      activeRoute.targets.map((tgt, idx) => (
-                        <div key={tgt.id}>
-                          {/* Simplified Target Row: Index, Model, Provider, Unboxed Metadata, Role Tag, Reorder Controls */}
-                          <div className="p-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-[4px] flex items-center justify-between gap-3 text-xs">
-                            <div className="flex items-center gap-3 min-w-0">
-                              {/* Clean Numerical Index */}
-                              <span className="w-5 text-center font-mono font-bold text-xs text-[var(--text-secondary)] tabular-nums shrink-0">
-                                {idx + 1}
-                              </span>
+                      <button
+                        onClick={() => setConfirmDeleteRouteId(activeRoute.id)}
+                        className="px-2.5 py-1 text-xs font-heading font-bold text-[var(--marker-red)] hover:bg-[var(--tint-red)] border border-[var(--marker-red)]/50 hover:border-[var(--marker-red)] rounded flex items-center gap-1 cursor-pointer transition-colors"
+                        title="Delete this route configuration"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Route</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                              <div className="min-w-0">
-                                {/* Model Name & Provider */}
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className="font-medium text-[var(--text-primary)] font-sans text-xs">
-                                    {tgt.modelDisplayName}
-                                  </span>
-                                  <span className="text-[11px] font-mono text-[var(--text-muted)]">
-                                    {tgt.providerName}
-                                  </span>
-                                </div>
+                {(routeValidationResult || routeValidationError) && (
+                  <div
+                    className="mb-5 p-3 border-2 rounded text-sm"
+                    role={routeValidationError || !routeValidationResult?.valid ? 'alert' : 'status'}
+                    style={{
+                      borderColor: routeValidationError || !routeValidationResult?.valid
+                        ? 'var(--marker-red)'
+                        : 'var(--pen-green)',
+                    }}
+                  >
+                    {routeValidationError ? (
+                      <p>{routeValidationError}</p>
+                    ) : (
+                      <>
+                        <strong>
+                          {routeValidationResult?.valid ? 'Route is valid' : 'Route has validation errors'}
+                        </strong>
+                        {routeValidationResult?.issues.length ? (
+                          <ul className="mt-2 space-y-1">
+                            {routeValidationResult.issues.map((issue, index) => (
+                              <li key={`${issue.code}-${index}`}>
+                                <span className="font-bold">{issue.severity}: {issue.code}</span>
+                                {issue.target_index == null ? '' : ` (target ${issue.target_index + 1})`}
+                                {' - '}{issue.message}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                )}
 
-                                {/* Zero-Pill Unboxed Metadata: Account & Weight with typographic dot */}
-                                <div className="text-[11px] font-sans text-[var(--text-muted)] mt-0.5 truncate flex items-center gap-1.5">
-                                  <span>{tgt.accountLabel || 'Auto (pool rotation)'}</span>
-                                  <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-                                  <span className="font-mono">weight {tgt.weight ?? 100}</span>
-                                </div>
-                              </div>
+                {/* Targets Fallback Sequence */}
+                <div className="space-y-3 mb-6">
+                  <h4 className="text-lg font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-[var(--marker-red)]" />
+                    Fallback Target Hierarchy (Priority Ordered)
+                  </h4>
+
+                  <div className="space-y-3">
+                    {activeRoute.targets.length === 0 && (
+                      <div className="p-6 text-center bg-[var(--erased-soft)] border-2 border-dashed border-[var(--ink)]/40 rounded">
+                        <Layers className="w-8 h-8 text-[var(--pen-blue)] mx-auto mb-2 opacity-60" />
+                        <p className="text-sm font-body text-[var(--ink)]/80">
+                          No targets yet. Add a model below to define this route's fallback order.
+                        </p>
+                      </div>
+                    )}
+
+                    {activeRoute.targets.map((tgt, idx) => (
+                      <React.Fragment key={tgt.id}>
+                        <div
+                          className="p-4 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3"
+                          style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full border-2 border-[var(--ink)] bg-[var(--pen-blue)] text-[var(--surface)] flex items-center justify-center font-heading font-bold text-base">
+                              #{tgt.priority}
                             </div>
-
-                            {/* Role Label & Reorder / Delete Actions */}
-                            <div className="flex items-center gap-3 shrink-0">
-                              {/* Clear Role Indicator: PRIMARY vs FALLBACK 1, FALLBACK 2... */}
-                              {idx === 0 ? (
-                                <span className="font-mono text-[10px] font-semibold tracking-wider text-[var(--primary)] bg-[var(--primary-bg)] px-2 py-0.5 rounded border border-[var(--primary-border)]">
-                                  PRIMARY
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-heading font-bold text-lg text-[var(--ink)]">
+                                  {tgt.modelDisplayName}
                                 </span>
-                              ) : (
-                                <span className="font-mono text-[10px] font-semibold tracking-wider text-[var(--text-muted)] bg-[var(--surface)] px-2 py-0.5 rounded border border-[var(--border)]">
-                                  FALLBACK {idx}
+                                <span className="text-xs font-mono bg-[var(--erased)] px-1.5 py-0.5 rounded border border-[var(--ink)]/30">
+                                  {tgt.providerName}
                                 </span>
-                              )}
-
-                              <div className="flex items-center gap-1 border-l border-[var(--border)] pl-2">
-                                <button
-                                  type="button"
-                                  onClick={() => moveTarget(activeRoute, idx, -1)}
-                                  disabled={idx === 0}
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 cursor-pointer"
-                                  title="Move up in cascade"
-                                >
-                                  <ArrowUp className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => moveTarget(activeRoute, idx, 1)}
-                                  disabled={idx === activeRoute.targets.length - 1}
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-20 cursor-pointer"
-                                  title="Move down in cascade"
-                                >
-                                  <ArrowDown className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = renumber(activeRoute.targets.filter((t) => t.id !== tgt.id));
-                                    onUpdateRoute({
-                                      ...activeRoute,
-                                      targets: updated,
-                                      totalHops: Math.max(0, updated.length - 1),
-                                    });
-                                  }}
-                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--danger)] cursor-pointer"
-                                  title="Remove target"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
                               </div>
+                              <p className="text-sm font-body text-[var(--ink)]/70">
+                                Serving Account: <strong>{tgt.accountLabel}</strong>
+                              </p>
                             </div>
                           </div>
 
-                          {/* Failover Branch Connector between targets */}
-                          {idx < activeRoute.targets.length - 1 && (
-                            <div className="flex items-center justify-center py-1">
-                              <span className="text-[11px] font-mono text-[var(--text-muted)] flex items-center gap-1">
-                                <ArrowDown className="w-3 h-3 text-[var(--warning)] shrink-0" />
-                                <span>Failover on {formatTriggers(activeRoute.fallbackTriggers)}</span>
-                              </span>
+                          <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="px-2 py-1 bg-[var(--tint-green)] text-[var(--success-text)] border border-[var(--pen-green)] rounded">
+                              {idx === 0 ? 'Primary Default' : `Fallback Tier ${idx}`}
+                            </span>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => moveTarget(activeRoute, idx, -1)}
+                                disabled={idx === 0}
+                                className="p-1 text-[var(--pen-blue)] hover:bg-[var(--tint-blue)] border border-transparent hover:border-[var(--pen-blue)]/40 rounded cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Move up in fallback order"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => moveTarget(activeRoute, idx, 1)}
+                                disabled={idx === activeRoute.targets.length - 1}
+                                className="p-1 text-[var(--pen-blue)] hover:bg-[var(--tint-blue)] border border-transparent hover:border-[var(--pen-blue)]/40 rounded cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title="Move down in fallback order"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                          )}
+
+                            {confirmRemoveTargetId === tgt.id ? (
+                              <div className="flex items-center gap-1 bg-[var(--tint-red)] px-2 py-0.5 border border-[var(--marker-red)] rounded">
+                                <span className="text-[var(--danger-text)] font-bold">Remove tier?</span>
+                                <button
+                                  onClick={() => {
+                                    const updatedTargets = renumber(
+                                      activeRoute.targets.filter((t) => t.id !== tgt.id),
+                                    );
+                                    onUpdateRoute({
+                                      ...activeRoute,
+                                      targets: updatedTargets,
+                                      totalHops: Math.max(0, updatedTargets.length - 1),
+                                    });
+                                    setConfirmRemoveTargetId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 bg-[var(--marker-red)] text-[var(--surface)] rounded font-bold hover:brightness-90 cursor-pointer"
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  onClick={() => setConfirmRemoveTargetId(null)}
+                                  className="px-1.5 py-0.5 bg-[var(--surface)] border border-[var(--ink)] rounded cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmRemoveTargetId(tgt.id)}
+                                className="p-1 text-[var(--marker-red)] hover:bg-[var(--tint-red)] border border-transparent hover:border-[var(--marker-red)]/40 rounded cursor-pointer transition-colors"
+                                title="Remove this target tier from route pool"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      ))
-                    )}
+
+                        {idx < activeRoute.targets.length - 1 && (
+                          <div className="flex justify-center -my-1">
+                            <div className="flex items-center gap-1 bg-[var(--postit)] px-3 py-1 border border-[var(--ink)] rounded-full text-xs font-mono sketch-shadow-sm z-10">
+                              <ArrowDown className="w-3.5 h-3.5 text-[var(--marker-red)]" />
+                              <span>Falls back on 429 / Quota / 5xx error</span>
+                            </div>
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </div>
 
-                  {/* Add Target Row: Consistent "target" language, clean form layout */}
-                  <div className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-[4px] space-y-2 mt-4">
-                    <span className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5 font-sans">
-                      <Plus className="w-3.5 h-3.5 text-[var(--primary)]" />
-                      Add target
-                    </span>
-                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 items-center">
-                      <Select
+                  {/* Add a fallback target */}
+                  <div className="p-3 bg-[var(--postit)] border border-[var(--ink)] rounded">
+                    <h5 className="text-sm font-heading font-bold text-[var(--ink)] mb-2 flex items-center gap-1">
+                      <Plus className="w-4 h-4" />
+                      Add Fallback Target
+                    </h5>
+                    <div className="flex flex-col md:flex-row gap-2">
+                      <select
                         value={newTargetModelId}
                         onChange={(e) => setNewTargetModelId(e.target.value)}
-                        className="w-full min-w-0"
+                        className="flex-1 min-w-0 bg-[var(--surface)] border-2 border-[var(--ink)] px-2 py-1.5 text-sm font-mono rounded focus:outline-none"
                       >
-                        <option value="">Select upstream model…</option>
+                        <option value="">Select a model…</option>
                         {models.map((m) => (
                           <option key={m.id} value={m.id}>
-                            {m.displayName} ({m.providerName})
+                            {m.displayName} — {m.providerName}
                           </option>
                         ))}
-                      </Select>
-                      <Select
+                      </select>
+                      <select
                         value={newTargetAccountId}
                         onChange={(e) => setNewTargetAccountId(e.target.value)}
-                        className="w-full min-w-0"
+                        className="flex-1 min-w-0 bg-[var(--surface)] border-2 border-[var(--ink)] px-2 py-1.5 text-sm font-mono rounded focus:outline-none"
                       >
-                        <option value="">Account: auto (pool rotation)</option>
+                        <option value="">Account: auto (lowest priority)</option>
                         {accounts.map((a) => (
                           <option key={a.id} value={a.id}>
-                            {a.label} ({a.providerName})
+                            {a.label} — {a.providerName}
                           </option>
                         ))}
-                      </Select>
-                      <Button
+                      </select>
+                      <SketchButton
+                        type="button"
                         variant="primary"
-                        size="sm"
-                        disabled={!newTargetModelId}
                         onClick={() => handleAddTarget(activeRoute)}
-                        className="shrink-0 whitespace-nowrap w-full md:w-auto"
+                        disabled={!newTargetModelId}
+                        className="gap-1 font-heading font-bold whitespace-nowrap"
                       >
-                        Add target
-                      </Button>
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </SketchButton>
                     </div>
+                    <p className="text-xs font-body text-[var(--ink)]/60 mt-2">
+                      Targets are tried in order; the first is primary, the rest are fallbacks.
+                      Choose a specific account to pin the tier, or leave it on auto.
+                    </p>
                   </div>
                 </div>
-              </Card>
-            </div>
-          )}
-        </div>
-      )}
+
+              {/* Route Policies & Triggers Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--paper)] p-4 border-2 border-[var(--ink)] rounded-lg">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Selection Strategy
+                  </label>
+                  <select
+                    value={activeRoute.selectionStrategy}
+                    onChange={(e) =>
+                      onUpdateRoute({
+                        ...activeRoute,
+                        selectionStrategy: e.target.value as Route['selectionStrategy'],
+                      })
+                    }
+                    className="w-full bg-[var(--surface)] border border-[var(--ink)] px-2 py-1.5 text-sm font-mono rounded"
+                  >
+                    {ROUTE_STRATEGIES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Max Concurrent Requests
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={activeRoute.maxConcurrentRequests ?? ''}
+                    onChange={(e) => onUpdateRoute({
+                      ...activeRoute,
+                      maxConcurrentRequests: e.target.value === '' ? null : Number(e.target.value),
+                    })}
+                    placeholder="Unlimited"
+                    className="w-full md:w-64 bg-[var(--surface)] border border-[var(--ink)] px-2 py-1.5 text-sm font-mono rounded"
+                  />
+                  <p className="text-xs text-[var(--ink)]/60 mt-1">Blank leaves the Route without a concurrency cap.</p>
+                </div>
+
+                <div>
+                  <h5 className="font-heading font-bold text-base text-[var(--ink)] mb-2 flex items-center gap-1">
+                    <Shield className="w-4 h-4 text-[var(--pen-blue)]" />
+                    Configured Fallback Triggers
+                  </h5>
+                  <div className="space-y-1.5 text-sm font-body">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={activeRoute.fallbackTriggers.on429}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, on429: e.target.checked },
+                          })
+                        }
+                        className="accent-[var(--marker-red)]"
+                      />
+                      <span>Rate limit (HTTP 429) & Cooldown honoring Retry-After</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={activeRoute.fallbackTriggers.onQuota}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, onQuota: e.target.checked },
+                          })
+                        }
+                        className="accent-[var(--marker-red)]"
+                      />
+                      <span>Quota exhaustion (Daily or Monthly provider caps)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={activeRoute.fallbackTriggers.on5xx}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            fallbackTriggers: { ...activeRoute.fallbackTriggers, on5xx: e.target.checked },
+                          })
+                        }
+                        className="accent-[var(--marker-red)]"
+                      />
+                      <span>Upstream 5xx / connection timeout</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="font-heading font-bold text-base text-[var(--ink)] mb-2 flex items-center gap-1">
+                    <Check className="w-4 h-4 text-[var(--pen-green)]" />
+                    Session & Conversation Continuity
+                  </h5>
+                  <div className="space-y-2 text-sm font-body">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={activeRoute.stickyRouting}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            stickyRouting: e.target.checked,
+                          })
+                        }
+                        className="accent-[var(--pen-blue)]"
+                      />
+                      <span>Sticky routing (Preserves prompt cache while target healthy)</span>
+                    </label>
+
+                    <div className="pt-1">
+                      <span className="text-xs font-mono text-[var(--ink)]/70 block mb-1">
+                        Opaque-State Portability Policy (FR-2.11):
+                      </span>
+                      <select
+                        value={activeRoute.portabilityPolicy}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            portabilityPolicy: e.target.value as any,
+                          })
+                        }
+                        className="bg-[var(--surface)] border border-[var(--ink)] px-2 py-1 text-xs font-mono rounded w-full"
+                      >
+                        <option value="strip_with_warning">Strip + warn client (recommended)</option>
+                        <option value="reject">Reject the fallback attempt</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={activeRoute.cacheAffinity}
+                        onChange={(e) =>
+                          onUpdateRoute({
+                            ...activeRoute,
+                            cacheAffinity: e.target.checked,
+                          })
+                        }
+                        className="accent-[var(--pen-blue)]"
+                      />
+                      <span>Cache affinity (keep a session on the same target, FR-7.3)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-dashed border-[var(--ink)]/30">
+                <h5 className="font-heading font-bold text-sm text-[var(--ink)] mb-2">
+                  Representative request for simulation
+                </h5>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  {[
+                    ['Tools', dryRunHasTools, setDryRunHasTools],
+                    ['Images', dryRunHasImages, setDryRunHasImages],
+                    ['Reasoning', dryRunHasReasoning, setDryRunHasReasoning],
+                  ].map(([label, checked, setChecked]) => (
+                    <label key={label as string} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked as boolean}
+                        onChange={(event) => (setChecked as (value: boolean) => void)(event.target.checked)}
+                        className="accent-[var(--pen-blue)]"
+                      />
+                      <span>{label as string} required</span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={dryRunAllowFallback}
+                      onChange={(event) => setDryRunAllowFallback(event.target.checked)}
+                      className="accent-[var(--pen-blue)]"
+                    />
+                    <span title="The Route's onQuota trigger can still disable quota fallback.">
+                      Allow request fallback
+                    </span>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span>Input tokens</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={dryRunInputTokens}
+                      onChange={(event) => setDryRunInputTokens(event.target.value)}
+                      className="bg-[var(--surface)] border border-[var(--ink)] px-2 py-1 rounded font-mono"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 col-span-2 md:col-span-4">
+                    <span>Session key (optional)</span>
+                    <input
+                      type="text"
+                      value={dryRunSession}
+                      onChange={(event) => setDryRunSession(event.target.value)}
+                      placeholder="Use a known session to simulate affinity"
+                      className="bg-[var(--surface)] border border-[var(--ink)] px-2 py-1 rounded font-mono"
+                    />
+                    <span className="text-[var(--ink)]/60">
+                      Uses in-memory affinity when this session has a known target.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {dryRunResult && (
+                <div
+                  className="mt-4 p-4 text-sm font-mono bg-[var(--surface)] border-2 border-[var(--pen-blue)]"
+                  style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-heading font-bold text-[var(--pen-blue)]">
+                      Route Dry Run (FR-8.7)
+                    </span>
+                    <button
+                      onClick={() => setDryRunResult(null)}
+                      className="text-[var(--ink)] hover:text-[var(--marker-red)] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {'error' in dryRunResult ? (
+                    <div style={{ color: 'var(--danger-text)' }}>{dryRunResult.error}</div>
+                  ) : (
+                    <>
+                      <div className="mb-1">
+                        Outcome:{' '}
+                        <strong>
+                          {dryRunResult.outcome === 'stochastic'
+                            ? 'Stochastic; no exact target predicted'
+                            : dryRunResult.outcome === 'rate_limited'
+                              ? 'Would return HTTP 429; no target dispatched'
+                              : dryRunResult.would_select ?? '(no eligible target)'}
+                        </strong>
+                      </div>
+                      <div className="mb-2 text-[var(--ink)]/70">
+                        {dryRunResult.selection_note}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-[800px] w-full table-fixed text-xs">
+                          <thead>
+                            <tr className="text-left border-b border-[var(--ink)]/30">
+                              <th scope="col" className="w-[22%] whitespace-nowrap px-2 py-1">Candidate</th>
+                              <th scope="col" className="w-[12%] whitespace-nowrap px-2">Predicate</th>
+                              <th scope="col" className="w-[18%] whitespace-nowrap px-2">Capabilities</th>
+                              <th scope="col" className="w-[18%] whitespace-nowrap px-2">Availability</th>
+                              <th scope="col" className="w-[12%] whitespace-nowrap px-2">Decision</th>
+                              <th scope="col" className="w-[18%] whitespace-nowrap px-2">Reason</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dryRunResult.candidates.map((candidate, index) => {
+                              const capabilitySummary = Object.entries(candidate.capability_details)
+                                .map(([name, detail]) =>
+                                  typeof detail === 'string'
+                                    ? `${name}: ${detail}`
+                                    : `${detail.required ? '* ' : ''}${name}: ${detail.status}`,
+                                )
+                                .join(', ');
+                              const reasons = candidate.not_selected_reasons.map(formatDryRunReason);
+                              return (
+                                <tr key={candidate.candidate_id || index} className={`border-b border-[var(--ink)]/10 ${candidate.selected ? 'bg-[var(--tint-blue)] font-bold' : ''}`}>
+                                  <td className="px-2 py-2 align-top break-words">
+                                    {candidate.strategy_rank == null ? '-' : `#${candidate.strategy_rank + 1}`} · {candidate.model} @ {candidate.account || '-'}
+                                  </td>
+                                  <td className="px-2 py-2 align-top break-words" title={candidate.predicate_explanation || undefined}>
+                                    {candidate.predicate_result || '-'}
+                                  </td>
+                                  <td className="px-2 py-2 align-top break-words">{capabilitySummary || (candidate.capability_eligible ? 'ok' : 'unknown')}</td>
+                                  <td className="px-2 py-2 align-top break-words">
+                                    {candidate.account_status} · circuit {candidate.provider_circuit_state}
+                                    {candidate.route_capacity_available === false ? ' · route full' : ''}
+                                    {candidate.account_quota_available === false ? ' · account quota' : ''}
+                                  </td>
+                                  <td className="px-2 py-2 align-top break-words" style={{ color: candidate.selected ? 'var(--pen-blue)' : candidate.eligible ? 'var(--pen-green)' : 'var(--danger-text)' }}>
+                                    {candidate.selected ? 'selected' : candidate.eligible ? 'eligible' : 'skipped'}
+                                  </td>
+                                  <td className="px-2 py-2 align-top break-words">
+                                    {reasons.length
+                                      ? reasons.join('; ')
+                                      : formatDryRunReason(candidate.decision_reason)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {dryRunResult.plugin_fact_failures.length > 0 && (
+                        <p className="mt-2 text-[var(--danger-text)]">
+                          Routing facts unavailable:{' '}
+                          {dryRunResult.plugin_fact_failures
+                            .map(({ plugin, reason }) => `${plugin}: ${reason}`)
+                            .join('; ')}
+                        </p>
+                      )}
+                      <div className="mt-2 text-[var(--ink)]/60">{dryRunResult.note}</div>
+                    </>
+                  )}
+                </div>
+              )}
+            </WobblyCard>
+          </div>
+        )}
+      </div>
+    )}
 
       {/* Create Route Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] max-w-lg w-full p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Create Route</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="w-full max-w-lg">
+            <WobblyCard decoration="tape" className="bg-[var(--paper)] p-6 relative">
               <button
-                type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="absolute top-4 right-4 text-[var(--ink)] font-bold text-xl hover:text-[var(--marker-red)] cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                ✕
               </button>
-            </div>
 
-            <form onSubmit={handleCreateRouteSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Route Identifier</label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. claude-3-7-sonnet or general-fast"
-                  required
-                  mono
-                />
-              </div>
+              <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+                <Shuffle className="w-6 h-6 text-[var(--pen-blue)]" />
+                Create New Fallback Route
+              </h3>
 
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Description</label>
-                <Input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Primary fast routing with Anthropic to OpenAI fallback"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[var(--text-muted)] font-mono mb-1">Target Selection Strategy</label>
-                <Select
-                  value={strategy}
-                  onChange={(e) => setStrategy(e.target.value as any)}
-                  className="w-full"
-                >
-                  {ROUTE_STRATEGIES.map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-[var(--border)] font-mono text-xs">
-                <span className="block text-[var(--text-muted)] uppercase tracking-wider text-[10px]">
-                  Failover Triggers
-                </span>
-                <label className="flex items-center gap-2 cursor-pointer">
+              <form onSubmit={handleCreateSubmit} className="space-y-4 font-body">
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Route Slug Name (Clients request this model)
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={on429}
-                    onChange={(e) => setOn429(e.target.checked)}
-                    className="rounded border-[var(--border)]"
+                    type="text"
+                    required
+                    placeholder="e.g. coder, fast-chat, vision-route"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
                   />
-                  <span>Failover on HTTP 429 Rate Limit</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={onQuota}
-                    onChange={(e) => setOnQuota(e.target.checked)}
-                    className="rounded border-[var(--border)]"
-                  />
-                  <span>Failover on Soft Quota Spend Exceeded</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={on5xx}
-                    onChange={(e) => setOn5xx(e.target.checked)}
-                    className="rounded border-[var(--border)]"
-                  />
-                  <span>Failover on Upstream 5xx Server Error</span>
-                </label>
-              </div>
+                </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
-                <Button variant="secondary" size="sm" type="button" onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" size="sm" type="submit">
-                  Create Route
-                </Button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Free Gemini tier falling back to paid Gemini and Groq"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobbly }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Selection Strategy
+                  </label>
+                  <select
+                    value={strategy}
+                    onChange={(e) => setStrategy(e.target.value as Route['selectionStrategy'])}
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
+                  >
+                    {ROUTE_STRATEGIES.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-heading font-bold text-[var(--ink)] mb-1">
+                    Max Concurrent Requests
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={maxConcurrentRequests}
+                    onChange={(e) => setMaxConcurrentRequests(e.target.value)}
+                    placeholder="Unlimited"
+                    className="w-full bg-[var(--surface)] border-2 border-[var(--ink)] px-3 py-2 text-base sketch-shadow-sm focus:outline-none font-mono"
+                    style={{ borderRadius: DESIGN_TOKENS.radii.wobblyMd }}
+                  />
+                  <p className="text-xs text-[var(--ink)]/60 mt-1">Blank leaves the Route without a concurrency cap.</p>
+                </div>
+
+                <div className="p-3 bg-[var(--postit)] border border-[var(--ink)] rounded space-y-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={on429}
+                      onChange={(e) => setOn429(e.target.checked)}
+                      className="accent-[var(--marker-red)]"
+                    />
+                    <span>Fallback automatically on 429 Rate Limit</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={onQuota}
+                      onChange={(e) => setOnQuota(e.target.checked)}
+                      className="accent-[var(--marker-red)]"
+                    />
+                    <span>Fallback on Quota Exhaustion</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={sticky}
+                      onChange={(e) => setSticky(e.target.checked)}
+                      className="accent-[var(--pen-blue)]"
+                    />
+                    <span>Enable sticky session routing (Prompt cache preservation)</span>
+                  </label>
+                  <p className="text-xs font-body text-[var(--ink)]/60 pl-6">
+                    Keeps a conversation on the same account/model across turns so the
+                    upstream provider's prompt cache stays warm. A client must send a
+                    session header (X-Kinetix-Session / X-Session-Id) for this to apply;
+                    if the sticky target becomes unhealthy, Kinetix falls back as usual.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-3">
+                  <SketchButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowCreateModal(false)}
+                  >
+                    Cancel
+                  </SketchButton>
+                  <SketchButton type="submit" variant="danger" className="font-bold">
+                    Create Route
+                  </SketchButton>
+                </div>
+              </form>
+            </WobblyCard>
           </div>
         </div>
       )}
     </div>
   );
 };
-

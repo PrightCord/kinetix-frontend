@@ -1,12 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, ShieldCheck, KeyRound, LogOut, Info, Globe2, Save, Terminal } from 'lucide-react';
-import { Card, Button, StatusBadge, Input, TerminalPanel } from '../KinetixUI';
+import { Settings, ShieldCheck, KeyRound, LogOut, Info, Globe2, Save } from 'lucide-react';
+import { WobblyCard, SketchBadge, SketchButton } from '../HandDrawnElements';
 import { Kinetix } from '../../lib/resources';
 
 interface SettingsViewProps {
   onLogout?: () => void;
 }
 
+/**
+ * Settings & Security. The dashboard password is stored server-side as a hash
+ * (never in the browser); changing it invalidates every existing session,
+ * including the one making the change, so the operator is signed out and must
+ * log in again.
+ */
 export const SettingsView: React.FC<SettingsViewProps> = ({ onLogout }) => {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -59,6 +65,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onLogout }) => {
       setCurrent('');
       setNext('');
       setConfirmPw('');
+      // All sessions (including this one) are now invalid; return to login.
       setTimeout(() => onLogout?.(), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -86,167 +93,162 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onLogout }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Control Plane Settings &amp; Security
-          </h2>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
-            Network origin, operator session policies, and cryptographic master credentials.
-          </p>
-        </div>
-
-        {onLogout && (
-          <Button variant="danger" size="sm" onClick={onLogout}>
-            <LogOut className="w-3.5 h-3.5" />
-            Sign Out Session
-          </Button>
-        )}
+      <div>
+        <h2 className="text-3xl font-heading font-bold text-[var(--ink)] flex items-center gap-2">
+          <Settings className="w-7 h-7 text-[var(--pen-blue)]" />
+          <span>Settings &amp; Security</span>
+          <SketchBadge variant="blue" rotation="1deg">
+            Control Plane
+          </SketchBadge>
+        </h2>
+        <p className="text-base font-body text-[var(--ink)]/80">
+          Runtime network identity, session handling, and the administrator password. Changes to the public base URL
+          take effect immediately for public-origin callbacks; desktop OAuth callbacks remain bound to the local listener.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Public Base URL */}
-        <Card
-          title="Public Base URL & Callback Origin"
-          subtitle="Externally reachable gateway URL for client SDKs and OAuth redirection"
-        >
-          <form onSubmit={savePublicBaseUrl} className="space-y-3 text-xs">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <WobblyCard decoration="tape" className="p-6">
+          <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+            <Globe2 className="w-6 h-6 text-[var(--pen-blue)]" />
+            Public Base URL
+          </h3>
+
+          <form onSubmit={savePublicBaseUrl} className="space-y-4">
             <div>
-              <label className="block text-[var(--text-muted)] font-mono mb-1">
-                External Ingress Base URL
-              </label>
-              <Input
+              <label className="block text-sm font-heading font-bold mb-1">Externally visible Kinetix URL</label>
+              <input
                 type="url"
                 value={publicBaseUrl}
                 onChange={(e) => setPublicBaseUrl(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                style={{ borderRadius: '12px 16px 12px 16px / 16px 12px 16px 12px' }}
                 placeholder="https://kinetix.example.com"
-                mono
+                autoComplete="url"
               />
-              <p className="text-[11px] text-[var(--text-muted)] mt-1 font-sans">
-                Used to generate client profiles and public callbacks. Desktop OAuth uses local loopback.
+              <p className="mt-2 text-xs font-body text-[var(--ink)]/70">
+                Used for externally visible links and web-style OAuth callbacks. Claude Code and Antigravity use
+                loopback callbacks derived from <span className="font-mono">KINETIX_BIND</span> instead.
               </p>
             </div>
 
-            <div className="text-[11px] font-mono text-[var(--text-muted)] p-2 rounded bg-[var(--surface-raised)] border border-[var(--border)]">
-              Active Source: <b>{publicBaseSource}</b>
-              {environmentDefault && <div className="mt-0.5">Default: {environmentDefault}</div>}
+            <div className="text-xs font-mono text-[var(--ink)]/70">
+              Active source: <strong>{publicBaseSource === 'dashboard' ? 'dashboard setting' : 'environment/default'}</strong>
+              {environmentDefault && (
+                <div className="mt-1 break-all">Startup default: {environmentDefault}</div>
+              )}
             </div>
 
             {publicBaseError && (
-              <div className="p-2 rounded bg-[var(--danger-bg)] border border-[var(--danger-border)] text-xs font-mono text-[var(--danger)]">
+              <div className="p-2 bg-[var(--tint-red)] border-2 border-[var(--marker-red)] rounded text-sm font-mono text-[var(--danger-text)]">
                 {publicBaseError}
               </div>
             )}
             {publicBaseDone && (
-              <div className="p-2 rounded bg-[var(--healthy-bg)] border border-[var(--healthy-border)] text-xs font-mono text-[var(--healthy)]">
-                Public base URL updated successfully.
+              <div className="p-2 bg-[var(--tint-green)] border-2 border-[var(--pen-green)] rounded text-sm font-mono text-[var(--success-text)]">
+                Public base URL updated. No restart required.
               </div>
             )}
 
-            <div className="pt-2">
-              <Button type="submit" variant="primary" size="sm" isLoading={publicBaseBusy}>
-                <Save className="w-3.5 h-3.5" />
-                Save Public URL
-              </Button>
-            </div>
+            <SketchButton type="submit" variant="primary" disabled={publicBaseBusy || !publicBaseUrl.trim()} className="gap-2">
+              <Save className="w-4 h-4" />
+              {publicBaseBusy ? 'Saving…' : 'Save Public URL'}
+            </SketchButton>
           </form>
-        </Card>
+        </WobblyCard>
 
-        {/* Change Password */}
-        <Card
-          title="Administrator Password"
-          subtitle="Stored as salted Argon2id/bcrypt hash. Invalidation terminates active sessions."
-        >
-          <form onSubmit={submit} className="space-y-3 text-xs">
+        <WobblyCard decoration="tack" className="p-6">
+          <h3 className="text-2xl font-heading font-bold text-[var(--ink)] mb-4 flex items-center gap-2">
+            <KeyRound className="w-6 h-6 text-[var(--marker-red)]" />
+            Change Administrator Password
+          </h3>
+
+          <form onSubmit={submit} className="space-y-4">
             <div>
-              <label className="block text-[var(--text-muted)] font-mono mb-1">Current Password</label>
-              <Input
+              <label className="block text-sm font-heading font-bold mb-1">Current Password</label>
+              <input
                 type="password"
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                style={{ borderRadius: '12px 16px 12px 16px / 16px 12px 16px 12px' }}
                 autoComplete="current-password"
-                required
-                mono
               />
             </div>
-
             <div>
-              <label className="block text-[var(--text-muted)] font-mono mb-1">New Password (min 8 chars)</label>
-              <Input
+              <label className="block text-sm font-heading font-bold mb-1">New Password (min 8 chars)</label>
+              <input
                 type="password"
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                style={{ borderRadius: '12px 16px 12px 16px / 16px 12px 16px 12px' }}
                 autoComplete="new-password"
-                required
-                mono
               />
             </div>
-
             <div>
-              <label className="block text-[var(--text-muted)] font-mono mb-1">Confirm New Password</label>
-              <Input
+              <label className="block text-sm font-heading font-bold mb-1">Confirm New Password</label>
+              <input
                 type="password"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] sketch-shadow-sm font-mono text-sm focus:outline-none focus:border-[var(--pen-blue)]"
+                style={{ borderRadius: '12px 16px 12px 16px / 16px 12px 16px 12px' }}
                 autoComplete="new-password"
-                required
-                mono
               />
             </div>
 
             {error && (
-              <div className="p-2 rounded bg-[var(--danger-bg)] border border-[var(--danger-border)] text-xs font-mono text-[var(--danger)]">
+              <div className="p-2 bg-[var(--tint-red)] border-2 border-[var(--marker-red)] rounded text-sm font-mono text-[var(--danger-text)]">
                 {error}
               </div>
             )}
             {done && (
-              <div className="p-2 rounded bg-[var(--healthy-bg)] border border-[var(--healthy-border)] text-xs font-mono text-[var(--healthy)]">
-                Password updated. Re-authenticating session…
+              <div className="p-2 bg-[var(--tint-green)] border-2 border-[var(--pen-green)] rounded text-sm font-mono text-[var(--success-text)]">
+                Password changed. All sessions invalidated — signing you out…
               </div>
             )}
 
-            <div className="pt-2">
-              <Button type="submit" variant="primary" size="sm" isLoading={busy}>
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Update Master Password
-              </Button>
-            </div>
+            <SketchButton type="submit" variant="primary" disabled={busy || !current || !next} className="gap-2">
+              <ShieldCheck className="w-4 h-4" />
+              {busy ? 'Updating…' : 'Update Password'}
+            </SketchButton>
           </form>
-        </Card>
+        </WobblyCard>
 
-        {/* Session Security Notes */}
-        <Card title="Session & Architectural Policies" subtitle="High-security operational invariants">
-          <ul className="space-y-2 text-xs text-[var(--text-secondary)]">
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--healthy)] mt-1.5 shrink-0" />
-              <span>
-                <b>Stateless Key Storage:</b> Virtual keys are verified against SHA-256 hashes in SQLite WAL; plaintext secrets are never retained.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--healthy)] mt-1.5 shrink-0" />
-              <span>
-                <b>Ephemeral Operator Sessions:</b> Signed HTTP-only session cookies with 12-hour TTL. Server restart immediately purges session caches.
-              </span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--healthy)] mt-1.5 shrink-0" />
-              <span>
-                <b>Zero Outbound Leakage:</b> Upstream provider API keys and bearer tokens are injected in server proxy memory only.
-              </span>
-            </li>
-          </ul>
-        </Card>
+        <div className="space-y-6">
+          <WobblyCard variant="muted" className="p-5">
+            <h4 className="text-lg font-heading font-bold mb-2 flex items-center gap-2">
+              <Info className="w-5 h-5 text-[var(--pen-blue)]" /> Session Policy
+            </h4>
+            <ul className="list-disc list-inside space-y-1.5 text-sm font-body text-[var(--ink)]/85">
+              <li>Sessions are held in server memory with a TTL (default 12 h).</li>
+              <li>
+                <strong>Restarting the server invalidates every session</strong>, so a browser must log in again — a
+                stale cookie can never grant access.
+              </li>
+              <li>Changing the password invalidates all sessions immediately.</li>
+              <li>The password is stored only as a hash, never in the browser.</li>
+            </ul>
+          </WobblyCard>
 
-        {/* CLI Equivalent */}
-        <TerminalPanel title="COMMAND LINE EQUIVALENT (CLI)" copyText="kinetix password set 'new-secret-key'">
-          <div className="space-y-1">
-            <div className="text-[var(--text-muted)]"># Update master password while daemon is active or stopped:</div>
-            <div className="text-[var(--terminal-green)]">kinetix password set 'new-secret-key'</div>
-            <div className="text-[var(--text-muted)]"># Verify status:</div>
-            <div className="text-[var(--terminal-green)]">kinetix status --json</div>
-          </div>
-        </TerminalPanel>
+          <WobblyCard decoration="tape" className="p-5">
+            <h4 className="text-lg font-heading font-bold mb-2">CLI Equivalent</h4>
+            <p className="text-sm font-body text-[var(--ink)]/85 mb-2">
+              The same change can be made without the dashboard (works while the server is stopped):
+            </p>
+            <pre className="bg-[var(--code-bg)] text-[var(--code-fg)] text-xs font-mono p-3 rounded overflow-x-auto">
+{`kinetix password set 'a-new-strong-password'
+kinetix password show`}
+            </pre>
+          </WobblyCard>
+
+          {onLogout && (
+            <SketchButton variant="danger" onClick={onLogout} className="gap-2">
+              <LogOut className="w-4 h-4" /> Sign Out Now
+            </SketchButton>
+          )}
+        </div>
       </div>
     </div>
   );

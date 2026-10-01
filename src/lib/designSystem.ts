@@ -1,65 +1,36 @@
 export const DESIGN_TOKENS = {
   colors: {
-    canvas: 'var(--canvas)',
-    sidebar: 'var(--sidebar)',
-    surface: 'var(--surface)',
-    surfaceRaised: 'var(--surface-raised)',
-    border: 'var(--border)',
-    borderStrong: 'var(--border-strong)',
-    borderSubtle: 'var(--border-subtle)',
-    textPrimary: 'var(--text-primary)',
-    textSecondary: 'var(--text-secondary)',
-    textMuted: 'var(--text-muted)',
-    healthy: 'var(--healthy)',
-    warning: 'var(--warning)',
-    danger: 'var(--danger)',
-    info: 'var(--info)',
-    primary: 'var(--primary)',
-
-    // Legacy mapped aliases
-    background: 'var(--canvas)',
-    foreground: 'var(--text-primary)',
-    muted: 'var(--surface-raised)',
-    accent: 'var(--danger)',
-    secondaryAccent: 'var(--info)',
-    penGreen: 'var(--healthy)',
-    markerOrange: 'var(--warning)',
-    postit: 'var(--surface-raised)',
-    postitBorder: 'var(--border-strong)',
+    background: 'var(--paper)',
+    foreground: 'var(--ink)',
+    muted: 'var(--erased)',
+    accent: 'var(--marker-red)',
+    border: 'var(--ink)',
+    secondaryAccent: 'var(--pen-blue)',
+    postit: 'var(--postit)',
+    postitBorder: 'var(--postit-border)',
+    penGreen: 'var(--pen-green)',
+    markerOrange: 'var(--marker-orange)',
   },
   radii: {
-    xs: '3px',
-    sm: '4px',
-    md: '6px',
-    lg: '8px',
-    pill: '9999px',
-
-    // Legacy mapped aliases
-    wobbly: '6px',
-    wobblyMd: '6px',
-    wobblyLg: '8px',
-    wobblyBtn: '4px',
-    wobblyBadge: '4px',
-    wobblyCardAlt: '6px',
-    wobblyCircle: '50%',
+    wobbly: '255px 15px 225px 15px / 15px 225px 15px 255px',
+    wobblyMd: '15px 255px 15px 225px / 225px 15px 255px 15px',
+    wobblyLg: '20px 280px 20px 260px / 260px 20px 280px 20px',
+    wobblyBtn: '255px 25px 225px 25px / 25px 225px 25px 255px',
+    wobblyBadge: '120px 10px 100px 10px / 10px 100px 10px 120px',
+    wobblyCardAlt: '255px 20px 240px 20px / 20px 240px 20px 255px',
+    wobblyCircle: '50% 50% 50% 50% / 55% 45% 55% 45%',
   },
   shadows: {
-    none: 'none',
-    sm: 'var(--shadow-sm)',
-    md: 'var(--shadow-md)',
-
-    // Legacy mapped aliases
-    standard: 'none',
-    emphasized: 'none',
-    subtle: 'none',
-    softPaper: 'none',
-    blue: 'none',
-    red: 'none',
+    standard: '4px 4px 0px 0px var(--shadow-ink)',
+    emphasized: '8px 8px 0px 0px var(--shadow-ink)',
+    subtle: '2px 2px 0px 0px var(--shadow-ink)',
+    softPaper: '3px 3px 0px 0px color-mix(in srgb, var(--shadow-ink) 10%, transparent)',
+    blue: '4px 4px 0px 0px var(--pen-blue)',
+    red: '4px 4px 0px 0px var(--marker-red)',
   },
 };
 
 export function formatCurrency(amount: number): string {
-  if (amount === 0) return '$0.00';
   if (amount < 0.001 && amount > 0) {
     return `< $0.001`;
   }

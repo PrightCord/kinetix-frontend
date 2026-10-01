@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { LogIn, X, ExternalLink } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { Kinetix } from '../lib/resources';
-import { Button, Card } from './KinetixUI';
+import { SketchButton, WobblyCard } from './HandDrawnElements';
 
 export interface AuthEnrollmentStart {
   authorize_url: string;
@@ -126,53 +126,42 @@ export function useAuthEnrollment({ onSuccess, onError }: UseAuthEnrollmentOptio
 
   const modal = session ? (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-labelledby="credential-auth-waiting-title"
     >
-      <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <Card className="p-5 bg-[var(--surface)] border border-[var(--border-strong)] rounded-[6px] shadow-2xl relative space-y-4">
-          <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-[4px] bg-[var(--primary-bg)] border border-[var(--primary-border)] flex items-center justify-center text-[var(--primary)] shrink-0">
-                <LogIn className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 id="credential-auth-waiting-title" className="text-sm font-semibold text-[var(--text-primary)]">
-                  Waiting for Account Authorization
-                </h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  Complete authorization in the upstream provider tab. Status polls automatically.
-                </p>
-              </div>
-            </div>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <WobblyCard decoration="tape" className="p-5 bg-[var(--paper)] relative">
+          <button
+            type="button"
+            onClick={() => setSession(null)}
+            disabled={busy}
+            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border-2 border-[var(--ink)] bg-[var(--surface)] hover:bg-[var(--tint-red)] font-heading font-bold cursor-pointer disabled:opacity-50"
+            aria-label="Cancel account authorization"
+            title="Cancel"
+          >
+            ✕
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setSession(null)}
-              disabled={busy}
-              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer disabled:opacity-50"
-              aria-label="Cancel account authorization"
-              title="Cancel"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          <h3 id="credential-auth-waiting-title" className="text-xl font-heading font-bold flex items-center gap-2 pr-10">
+            <LogIn className="w-5 h-5 text-[var(--pen-blue)]" />
+            Waiting for account authorization
+          </h3>
+          <p className="mt-2 text-sm font-body text-[var(--ink)]/80">
+            Complete authorization in the tab that was opened. Kinetix checks the authorization status automatically.
+          </p>
 
-          <div className="flex gap-2 flex-wrap text-xs">
-            <Button
+          <div className="mt-3 flex gap-2 flex-wrap">
+            <SketchButton
               variant="secondary"
-              size="sm"
               onClick={() => window.open(session.authorizeUrl, '_blank', 'noopener,noreferrer')}
               disabled={busy}
             >
-              <ExternalLink className="w-3.5 h-3.5 text-[var(--primary)]" />
-              Reopen Authorization Tab
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
+              Reopen authorization
+            </SketchButton>
+            <SketchButton
+              variant="secondary"
               onClick={() =>
                 setSession((current) =>
                   current ? { ...current, showFallback: !current.showFallback } : current,
@@ -180,19 +169,19 @@ export function useAuthEnrollment({ onSuccess, onError }: UseAuthEnrollmentOptio
               }
               disabled={busy}
             >
-              {session.showFallback ? 'Hide Manual Fallback' : 'Loopback Did Not Load?'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setSession(null)} disabled={busy}>
+              {session.showFallback ? 'Hide manual fallback' : 'Loopback did not load?'}
+            </SketchButton>
+            <SketchButton variant="secondary" onClick={() => setSession(null)} disabled={busy}>
               Cancel
-            </Button>
+            </SketchButton>
           </div>
 
           {session.showFallback && (
-            <div className="mt-3 p-3 bg-[var(--surface-raised)] border border-[var(--border)] rounded-[4px] space-y-2 text-xs">
-              <p className="text-[11px] text-[var(--text-muted)]">
-                Paste the final callback URL from your browser address bar. It must match the configured redirect URI:
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-body text-[var(--ink)]/70">
+                Paste the final callback URL from the browser address bar. It must match the redirect URI for this session.
               </p>
-              <code className="block text-[11px] font-mono break-all bg-[var(--surface)] p-2 rounded border border-[var(--border-subtle)] text-[var(--primary)]">
+              <code className="block text-xs break-all bg-[var(--erased)] px-2 py-1">
                 {session.redirectUri}
               </code>
               <textarea
@@ -203,23 +192,19 @@ export function useAuthEnrollment({ onSuccess, onError }: UseAuthEnrollmentOptio
                     current ? { ...current, callbackUrl: event.target.value } : current,
                   )
                 }
-                placeholder="https://.../callback?code=..."
-                className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-[4px] font-mono text-xs text-[var(--text-primary)] focus:border-[var(--primary)] focus-visible:outline-none"
+                placeholder="Paste callback URL"
+                className="w-full px-3 py-2 bg-[var(--surface)] border-2 border-[var(--ink)] font-mono text-xs"
               />
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => void completeManual()}
-                  disabled={busy || !session.callbackUrl.trim()}
-                  isLoading={busy}
-                >
-                  Complete Authorization
-                </Button>
-              </div>
+              <SketchButton
+                variant="primary"
+                onClick={() => void completeManual()}
+                disabled={busy || !session.callbackUrl.trim()}
+              >
+                {busy ? 'Completing…' : 'Complete authorization'}
+              </SketchButton>
             </div>
           )}
-        </Card>
+        </WobblyCard>
       </div>
     </div>
   ) : null;
