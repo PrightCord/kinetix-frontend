@@ -9,15 +9,19 @@ function kinetixMockApiPlugin(): Plugin {
       server.middlewares.use((req: any, res: any, next: any) => {
         const rawUrl = req.url || '';
         const url = rawUrl.startsWith('/admin') ? rawUrl.replace(/^\/admin/, '') : rawUrl;
+        const pathname = url.split('?')[0] || '';
 
-        if (url === '/healthz') {
+        if (pathname === '/healthz' || rawUrl === '/healthz') {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ status: 'healthy', version: '0.5.2', uptime_seconds: 3600 }));
           return;
         }
 
-        if (url.startsWith('/admin/api/health/runtime')) {
-          const urlParams = new URL(url, 'http://localhost:3000');
+        if (
+          pathname.startsWith('/api/health/runtime') ||
+          rawUrl.startsWith('/admin/api/health/runtime')
+        ) {
+          const urlParams = new URL(rawUrl, 'http://localhost:3000');
           const windowKey = urlParams.searchParams.get('window') || '1h';
           res.setHeader('Content-Type', 'application/json');
           res.end(
@@ -188,7 +192,10 @@ function kinetixMockApiPlugin(): Plugin {
           return;
         }
 
-        if (url.startsWith('/admin/api/route-traces/')) {
+        if (
+          pathname.startsWith('/api/route-traces/') ||
+          rawUrl.startsWith('/admin/api/route-traces/')
+        ) {
           res.setHeader('Content-Type', 'application/json');
           res.end(
             JSON.stringify({
@@ -202,9 +209,12 @@ function kinetixMockApiPlugin(): Plugin {
         }
 
         if (
-          url.startsWith('/admin/api/test-stream') ||
-          url.startsWith('/v1/chat/completions') ||
-          url.startsWith('/v1/messages')
+          pathname.startsWith('/api/test-stream') ||
+          rawUrl.startsWith('/admin/api/test-stream') ||
+          pathname.startsWith('/v1/chat/completions') ||
+          rawUrl.startsWith('/v1/chat/completions') ||
+          pathname.startsWith('/v1/messages') ||
+          rawUrl.startsWith('/v1/messages')
         ) {
           res.setHeader('Content-Type', 'text/event-stream');
           res.setHeader('Cache-Control', 'no-cache');
