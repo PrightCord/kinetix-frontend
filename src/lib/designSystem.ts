@@ -11,6 +11,14 @@ export const DESIGN_TOKENS = {
     penGreen: 'var(--pen-green)',
     markerOrange: 'var(--marker-orange)',
   },
+  status: {
+    success: 'var(--pen-green)',
+    info: 'var(--pen-blue)',
+    warning: 'var(--marker-orange)',
+    error: 'var(--marker-red)',
+    inactive: 'var(--ink-muted)',
+    route: '#8b5cf6',
+  },
   radii: {
     wobbly: '255px 15px 225px 15px / 15px 225px 15px 255px',
     wobblyMd: '15px 255px 15px 225px / 225px 15px 255px 15px',

@@ -99,57 +99,56 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
     label: 'Console',
     items: [
-      { id: 'overview', label: 'Operations Console', icon: <Gauge className="w-5 h-5 text-emerald-500" />, badge: 'Ops' },
+      { id: 'overview', label: 'Operations Console', icon: <Gauge className="w-4 h-4 text-emerald-500" />, badge: 'Ops' },
     ],
   },
   {
     label: 'Traffic & Execution',
     items: [
-      { id: 'traffic', label: 'Live Traffic Flow', icon: <Radio className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />, badge: 'Live' },
-      { id: 'traces', label: 'Request Traces', icon: <Activity className="w-5 h-5 text-blue-500" /> },
-      { id: 'failures', label: 'Failure Explorer', icon: <AlertOctagon className="w-5 h-5 text-rose-500" />, badge: 'Audit' },
+      { id: 'traffic', label: 'Traffic', icon: <Radio className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />, badge: 'Live' },
+      { id: 'traces', label: 'Traces', icon: <Activity className="w-4 h-4 text-blue-500" /> },
+      { id: 'failures', label: 'Failures', icon: <AlertOctagon className="w-4 h-4 text-amber-500" /> },
     ],
   },
   {
     label: 'Routing & Topology',
     items: [
-      { id: 'routes', label: 'Routes & Fallback', icon: <Shuffle className="w-5 h-5 text-purple-500" />, badge: 'Active' },
-      { id: 'playground', label: 'Route Playground', icon: <Play className="w-5 h-5 text-blue-600" />, badge: 'Dry-Run' },
-      { id: 'affinity', label: 'Cache & Affinity', icon: <Database className="w-5 h-5 text-cyan-500" /> },
-      { id: 'topology', label: 'Credential Topology', icon: <Network className="w-5 h-5 text-indigo-500" /> },
+      { id: 'routes', label: 'Routes', icon: <Shuffle className="w-4 h-4 text-purple-500" /> },
+      { id: 'playground', label: 'Playground', icon: <Play className="w-4 h-4 text-blue-600" /> },
+      { id: 'affinity', label: 'Cache & Affinity', icon: <Database className="w-4 h-4 text-cyan-500" /> },
+      { id: 'topology', label: 'Credentials', icon: <Network className="w-4 h-4 text-indigo-500" /> },
     ],
   },
   {
-    label: 'Models & Reasoning',
+    label: 'Model Intelligence',
     items: [
-      { id: 'matrix', label: 'Capability Matrix', icon: <Table className="w-5 h-5 text-indigo-400" /> },
-      { id: 'reasoning', label: 'Reasoning Inspector', icon: <Cpu className="w-5 h-5 text-purple-600" /> },
-      { id: 'aliases', label: 'Model Aliases', icon: <Compass className="w-5 h-5 text-amber-500" /> },
+      { id: 'matrix', label: 'Capabilities', icon: <Table className="w-4 h-4 text-indigo-400" /> },
+      { id: 'reasoning', label: 'Reasoning', icon: <Cpu className="w-4 h-4 text-purple-600" /> },
+      { id: 'aliases', label: 'Model Aliases', icon: <Compass className="w-4 h-4 text-amber-500" /> },
     ],
   },
   {
-    label: 'Providers & Accounts',
+    label: 'Upstream',
     items: [
-      { id: 'providers', label: 'Upstream Providers', icon: <Server className="w-5 h-5" /> },
-      { id: 'accounts', label: 'Accounts & Pools', icon: <Users className="w-5 h-5" /> },
-      { id: 'account-health', label: 'Account Health', icon: <ShieldCheck className="w-5 h-5 text-emerald-600" />, badge: 'Status' },
-      { id: 'plugins', label: 'Plugins & Integrations', icon: <Puzzle className="w-5 h-5 text-blue-500" /> },
+      { id: 'providers', label: 'Providers', icon: <Server className="w-4 h-4" /> },
+      { id: 'accounts', label: 'Accounts', icon: <Users className="w-4 h-4" /> },
+      { id: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4 text-blue-500" /> },
     ],
   },
   {
     label: 'Observability',
     items: [
-      { id: 'health', label: 'Runtime Health', icon: <Activity className="w-5 h-5 text-emerald-500" /> },
-      { id: 'costs', label: 'Spend & Tokens', icon: <BarChart3 className="w-5 h-5 text-emerald-600" /> },
-      { id: 'incidents', label: 'Incident Timeline', icon: <Clock className="w-5 h-5 text-amber-500" /> },
-      { id: 'history', label: 'Config & Rollback', icon: <History className="w-5 h-5 text-slate-500" /> },
+      { id: 'health', label: 'Runtime Health', icon: <Activity className="w-4 h-4 text-emerald-500" /> },
+      { id: 'costs', label: 'Spend & Tokens', icon: <BarChart3 className="w-4 h-4 text-emerald-600" /> },
+      { id: 'incidents', label: 'Incidents', icon: <Clock className="w-4 h-4 text-amber-500" /> },
+      { id: 'history', label: 'Config History', icon: <History className="w-4 h-4 text-slate-500" /> },
     ],
   },
   {
     label: 'System',
     items: [
-      { id: 'keys', label: 'Virtual Keys', icon: <Key className="w-5 h-5" /> },
-      { id: 'settings', label: 'Settings & Security', icon: <Settings className="w-5 h-5" /> },
+      { id: 'keys', label: 'Virtual Keys', icon: <Key className="w-4 h-4" /> },
+      { id: 'settings', label: 'Settings & Security', icon: <Settings className="w-4 h-4" /> },
     ],
   },
 ];
@@ -207,13 +206,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const nav = (
-    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+    <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-3">
       {NAV_GROUPS.map((group) => (
         <div key={group.label}>
-          <div className="px-2 mb-1.5 text-[0.7rem] font-heading font-bold uppercase tracking-[0.15em] text-[var(--ink)]/45">
+          <div className="px-2 mb-1 text-[0.65rem] font-mono font-bold uppercase tracking-wider text-[var(--ink)]/50">
             {group.label}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {group.items.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -226,27 +225,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onSelectTab(item.id);
                     onCloseMobile();
                   }}
-                  className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 border-2 transition-all select-none no-underline cursor-pointer ${
+                  className={`group relative flex items-center gap-2.5 pl-2.5 pr-2 py-1.5 border transition-all select-none no-underline cursor-pointer ${
                     isActive
-                      ? 'bg-[var(--surface)] border-[var(--ink)] sketch-shadow-sm font-bold -translate-y-0.5'
-                      : 'bg-transparent border-transparent hover:bg-[var(--erased)]/60 hover:border-[var(--ink)]/30'
+                      ? 'bg-[var(--surface)] border-[var(--ink)] sketch-shadow-sm font-bold -translate-y-0.5 text-[var(--ink)]'
+                      : 'bg-transparent border-transparent text-[var(--ink)]/80 hover:bg-[var(--erased)]/60 hover:border-[var(--ink)]/20 hover:text-[var(--ink)]'
                   }`}
-                  style={{ borderRadius: '14px 10px 16px 10px / 10px 16px 10px 14px' }}
+                  style={{ borderRadius: '10px 8px 10px 8px / 8px 10px 8px 10px' }}
                 >
                   {/* active marker bar */}
                   <span
-                    className={`absolute left-0 top-1.5 bottom-1.5 w-1.5 rounded-full ${
+                    className={`absolute left-0 top-1 bottom-1 w-1 rounded-full ${
                       isActive ? 'bg-[var(--marker-red)]' : 'bg-transparent'
                     }`}
                   />
-                  <span className={isActive ? 'text-[var(--marker-red)]' : 'text-[var(--ink)]/60 group-hover:text-[var(--ink)]'}>
+                  <span className={`shrink-0 ${isActive ? 'text-[var(--marker-red)]' : 'text-[var(--ink)]/60 group-hover:text-[var(--ink)]'}`}>
                     {item.icon}
                   </span>
-                  <span className="flex-1 text-base font-heading text-[var(--ink)]">{item.label}</span>
+                  <span className="flex-1 text-xs font-mono font-medium truncate">{item.label}</span>
                   {item.badge && (
                     <span
-                      className={`text-[0.65rem] px-1.5 py-0.5 rounded-full border border-[var(--ink)] font-heading ${
-                        item.badge === 'Live' ? 'bg-[var(--marker-red)] text-[var(--surface)] animate-pulse' : 'bg-[var(--postit)] text-[var(--ink)]'
+                      className={`text-[0.6rem] px-1 py-0.2 rounded border font-mono ${
+                        item.badge === 'Live'
+                          ? 'bg-[var(--marker-red)] text-[var(--surface)] border-[var(--marker-red)] animate-pulse'
+                          : 'bg-[var(--postit)] text-[var(--ink)] border-[var(--ink)]/40'
                       }`}
                     >
                       {item.badge}
@@ -262,7 +263,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   const footer = currentUser && (
-    <div className="px-3 pb-4 pt-2 border-t-2 border-dashed border-[var(--ink)]/20">
+    <div className="px-2.5 pb-3 pt-2 border-t-2 border-dashed border-[var(--ink)]/20">
       <div className="flex items-center gap-2 mb-2 px-1">
         <div className="w-2 h-2 rounded-full bg-[var(--pen-green)] shrink-0" />
         <span className="text-xs font-mono text-[var(--ink)]/80 truncate font-bold" title={`Session: ${currentUser}`}>
@@ -273,11 +274,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <button
           id="btn-logout"
           onClick={onLogout}
-          className="w-full px-3 py-2 bg-[var(--surface)] hover:bg-[var(--tint-red)] text-[var(--ink)] hover:text-[var(--marker-red)] border-2 border-[var(--ink)] cursor-pointer transition-colors flex items-center justify-center gap-2 text-sm font-heading font-bold sketch-shadow-sm"
+          className="w-full px-2.5 py-1.5 bg-[var(--surface)] hover:bg-[var(--tint-red)] text-[var(--ink)] hover:text-[var(--marker-red)] border-2 border-[var(--ink)] cursor-pointer transition-colors flex items-center justify-center gap-2 text-xs font-mono font-bold sketch-shadow-sm"
           style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
           title="Sign Out / Lock Gateway"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="w-3.5 h-3.5" />
           Sign Out
         </button>
       )}
@@ -287,8 +288,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop rail */}
-      <aside className="hidden lg:flex flex-col w-64 shrink-0 h-screen sticky top-0 bg-[var(--paper)] border-r-2 border-[var(--ink)]">
-        <div className="px-4 pt-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/20">
+      <aside className="hidden lg:flex flex-col w-56 shrink-0 h-screen sticky top-0 bg-[var(--paper)] border-r-2 border-[var(--ink)]">
+        <div className="px-3.5 pt-3.5 pb-2.5 border-b-2 border-dashed border-[var(--ink)]/20">
           <Brand />
         </div>
         {nav}
@@ -305,11 +306,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={onCloseMobile}
         />
         <aside
-          className={`absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] flex flex-col bg-[var(--paper)] border-r-2 border-[var(--ink)] transition-transform duration-200 ${
+          className={`absolute left-0 top-0 bottom-0 w-64 max-w-[85vw] flex flex-col bg-[var(--paper)] border-r-2 border-[var(--ink)] shadow-2xl transition-transform duration-200 ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b-2 border-dashed border-[var(--ink)]/20">
+          <div className="flex items-center justify-between px-3.5 pt-3.5 pb-2.5 border-b-2 border-dashed border-[var(--ink)]/20">
             <Brand compact />
             <button
               onClick={onCloseMobile}
@@ -405,9 +406,9 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Current page */}
-        <div className="min-w-0">
-          <h2 className="text-xl md:text-2xl font-heading font-bold text-[var(--ink)] truncate leading-tight">
+        {/* Mobile-only current view breadcrumb */}
+        <div className="lg:hidden min-w-0">
+          <h2 className="text-sm font-mono font-bold text-[var(--ink)] truncate leading-tight">
             {tabLabel(activeTab)}
           </h2>
         </div>
@@ -417,43 +418,32 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* At-a-glance status — grouped, quiet, wraps on small screens */}
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <div
-            className="hidden sm:flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
+            className="hidden sm:flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-mono"
             style={{ borderRadius: '15px 225px 255px 25px / 255px 25px 225px 15px' }}
             title="Cloudflare Tunnel status"
           >
             <span className="w-2 h-2 rounded-full bg-[var(--pen-green)] animate-pulse border border-[var(--ink)]" />
             <ShieldCheck className="w-3.5 h-3.5 text-[var(--pen-blue)]" />
-            <span className="font-body text-[var(--ink)]">
-              Tunnel <strong className="font-heading">Online</strong>
+            <span className="text-[var(--ink)]">
+              Tunnel: <strong className="font-bold">Online</strong>
             </span>
           </div>
 
           <div
-            className="flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
-            style={{ borderRadius: '255px 25px 225px 25px / 25px 225px 25px 255px' }}
-            title="Active upstream streams"
-          >
-            <Activity className="w-3.5 h-3.5 text-[var(--marker-red)]" />
-            <span className="font-body text-[var(--ink)]">
-              <strong className="font-heading text-sm">{metrics.activeStreams}</strong> streams
-            </span>
-          </div>
-
-          <div
-            className="flex items-center gap-1.5 bg-[var(--postit)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs"
+            className="flex items-center gap-1.5 bg-[var(--postit)] px-2.5 py-1 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-mono"
             style={{ borderRadius: '20px 300px 20px 280px / 280px 20px 300px 20px' }}
             title="Total recorded spend"
           >
-            <DollarSign className="w-3.5 h-3.5 text-[var(--pen-blue)]" />
-            <span className="font-body text-[var(--ink)]">
-              <strong className="font-heading text-sm">{formatCurrency(metrics.totalSpendUsd)}</strong>
+            <DollarSign className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="text-[var(--ink)]">
+              Spend: <strong className="font-bold text-sm">{formatCurrency(metrics.totalSpendUsd)}</strong>
             </span>
           </div>
 
           {onOpenDebugMode && (
             <button
               onClick={onOpenDebugMode}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-heading font-bold cursor-pointer transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-mono font-bold cursor-pointer transition-colors ${
                 isDebugActive
                   ? 'bg-amber-400 text-black animate-pulse'
                   : 'bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--erased)]'
@@ -462,7 +452,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               title="Enhanced Operational Debug Mode"
             >
               <Bug className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden md:inline">{isDebugActive ? 'Debug Active' : 'Debug Mode'}</span>
+              <span>{isDebugActive ? 'Debug: Active' : 'Debug: Off'}</span>
             </button>
           )}
 
@@ -470,11 +460,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-sm font-heading font-bold cursor-pointer hover:bg-[var(--erased)] disabled:opacity-60"
+              className="flex items-center gap-1.5 bg-[var(--surface)] px-2.5 py-1.5 border-2 border-[var(--ink)] sketch-shadow-sm text-xs font-mono font-bold cursor-pointer hover:bg-[var(--erased)] disabled:opacity-60"
               style={{ borderRadius: '255px 15px 225px 15px / 15px 225px 15px 255px' }}
               title="Reload all data from the admin API"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">Refresh</span>
             </button>
           )}
@@ -483,12 +473,12 @@ export const TopBar: React.FC<TopBarProps> = ({
 
           <SketchButton
             id="btn-test-proxy"
-            variant="danger"
+            variant="secondary"
             size="sm"
             onClick={onOpenTester}
-            className="gap-1.5 font-heading font-bold"
+            className="gap-1.5 font-bold font-mono text-xs flex items-center bg-[var(--surface)] text-[var(--ink)] border-2 border-[var(--ink)] hover:bg-[var(--erased)] cursor-pointer"
           >
-            <Play className="w-4 h-4 fill-[var(--surface)]" />
+            <Play className="w-3 h-3 text-indigo-600 fill-indigo-600" />
             <span className="hidden sm:inline">Live Proxy Test</span>
             <span className="sm:hidden">Test</span>
           </SketchButton>

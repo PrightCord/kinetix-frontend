@@ -101,9 +101,9 @@ export const SketchButton: React.FC<SketchButtonProps> = ({
       ? 'px-6 py-2.5 text-xl font-bold'
       : 'px-4 py-2 text-lg';
 
-  let colorStyles = 'bg-[var(--surface)] text-[var(--ink)] border-2 border-[var(--ink)] hover:bg-[var(--marker-red)] hover:text-[var(--surface)]';
+  let colorStyles = 'bg-[var(--surface)] text-[var(--ink)] border-2 border-[var(--ink)] hover:bg-[var(--pen-blue)] hover:text-[var(--surface)]';
   if (variant === 'secondary') {
-    colorStyles = 'bg-[var(--erased)] text-[var(--ink)] border-2 border-[var(--ink)] hover:bg-[var(--pen-blue)] hover:text-[var(--surface)]';
+    colorStyles = 'bg-[var(--erased)] text-[var(--ink)] border-2 border-[var(--ink)] hover:bg-[var(--erased-soft)]';
   } else if (variant === 'danger') {
     colorStyles = 'bg-[var(--marker-red)] text-[var(--surface)] border-2 border-[var(--ink)] hover:brightness-90';
   } else if (variant === 'ghost') {
